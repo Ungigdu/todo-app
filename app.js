@@ -190,12 +190,12 @@ class GitHubTodoApp {
                 }
 
                 // Hide settings input, show password-only UI
-                this.tokenGroup.classList.add('hidden');
-                this.repoGroup.classList.add('hidden');
-                this.savedSettingsMsg.classList.remove('hidden');
-                this.savedRepoDisplay.textContent = `Repo: ${repo}`;
-                this.checkBtn.classList.add('hidden');
-                this.loginBtn.classList.remove('hidden');
+                if (this.tokenGroup) this.tokenGroup.classList.add('hidden');
+                if (this.repoGroup) this.repoGroup.classList.add('hidden');
+                if (this.savedSettingsMsg) this.savedSettingsMsg.classList.remove('hidden');
+                if (this.savedRepoDisplay) this.savedRepoDisplay.textContent = `Repo: ${repo}`;
+                if (this.checkBtn) this.checkBtn.classList.add('hidden');
+                if (this.loginBtn) this.loginBtn.classList.remove('hidden');
                 this.showLoginError('');
                 this.passwordInput.focus();
 
@@ -236,11 +236,11 @@ class GitHubTodoApp {
             this.repoInput.value = savedRepo;
 
             // Immediately hide settings and show loading state
-            this.tokenGroup.classList.add('hidden');
-            this.repoGroup.classList.add('hidden');
-            this.savedSettingsMsg.classList.remove('hidden');
-            this.savedRepoDisplay.textContent = `Repo: ${savedRepo}`;
-            this.checkBtn.classList.add('hidden');
+            if (this.tokenGroup) this.tokenGroup.classList.add('hidden');
+            if (this.repoGroup) this.repoGroup.classList.add('hidden');
+            if (this.savedSettingsMsg) this.savedSettingsMsg.classList.remove('hidden');
+            if (this.savedRepoDisplay) this.savedRepoDisplay.textContent = `Repo: ${savedRepo}`;
+            if (this.checkBtn) this.checkBtn.classList.add('hidden');
 
             // Auto-verify the saved settings
             await this.checkExistingData(true);
@@ -252,15 +252,15 @@ class GitHubTodoApp {
         localStorage.removeItem('github_repo');
         this.token = null;
         this.repo = null;
-        this.tokenGroup.classList.remove('hidden');
-        this.repoGroup.classList.remove('hidden');
-        this.savedSettingsMsg.classList.add('hidden');
-        this.checkBtn.classList.remove('hidden');
-        this.loginBtn.classList.add('hidden');
-        this.confirmPasswordGroup.classList.add('hidden');
-        this.tokenInput.value = '';
-        this.repoInput.value = '';
-        this.tokenInput.focus();
+        if (this.tokenGroup) this.tokenGroup.classList.remove('hidden');
+        if (this.repoGroup) this.repoGroup.classList.remove('hidden');
+        if (this.savedSettingsMsg) this.savedSettingsMsg.classList.add('hidden');
+        if (this.checkBtn) this.checkBtn.classList.remove('hidden');
+        if (this.loginBtn) this.loginBtn.classList.add('hidden');
+        if (this.confirmPasswordGroup) this.confirmPasswordGroup.classList.add('hidden');
+        if (this.tokenInput) this.tokenInput.value = '';
+        if (this.repoInput) this.repoInput.value = '';
+        if (this.tokenInput) this.tokenInput.focus();
     }
 
     showLoginScreen() {
@@ -543,16 +543,16 @@ class GitHubTodoApp {
         this.todos = [];
         this.fileSha = null;
         this.isFirstTimeSetup = false;
-        this.tokenInput.value = '';
-        this.repoInput.value = '';
-        this.passwordInput.value = '';
-        this.confirmPasswordInput.value = '';
-        this.tokenGroup.classList.remove('hidden');
-        this.repoGroup.classList.remove('hidden');
-        this.savedSettingsMsg.classList.add('hidden');
-        this.confirmPasswordGroup.classList.add('hidden');
-        this.checkBtn.classList.remove('hidden');
-        this.loginBtn.classList.add('hidden');
+        if (this.tokenInput) this.tokenInput.value = '';
+        if (this.repoInput) this.repoInput.value = '';
+        if (this.passwordInput) this.passwordInput.value = '';
+        if (this.confirmPasswordInput) this.confirmPasswordInput.value = '';
+        if (this.tokenGroup) this.tokenGroup.classList.remove('hidden');
+        if (this.repoGroup) this.repoGroup.classList.remove('hidden');
+        if (this.savedSettingsMsg) this.savedSettingsMsg.classList.add('hidden');
+        if (this.confirmPasswordGroup) this.confirmPasswordGroup.classList.add('hidden');
+        if (this.checkBtn) this.checkBtn.classList.remove('hidden');
+        if (this.loginBtn) this.loginBtn.classList.add('hidden');
         this.showLoginScreen();
     }
 }
