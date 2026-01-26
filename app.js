@@ -94,7 +94,11 @@ class GitHubTodoApp {
         this.todoScreen = document.getElementById('todo-screen');
 
         // Login elements
+        this.tokenGroup = document.getElementById('token-group');
         this.tokenInput = document.getElementById('token');
+        this.tokenSavedMsg = document.getElementById('token-saved-msg');
+        this.changeTokenLink = document.getElementById('change-token-link');
+        this.passwordGroup = document.getElementById('password-group');
         this.passwordInput = document.getElementById('encryption-password');
         this.confirmPasswordGroup = document.getElementById('confirm-password-group');
         this.confirmPasswordInput = document.getElementById('confirm-password');
@@ -121,6 +125,10 @@ class GitHubTodoApp {
     bindEvents() {
         this.checkBtn.addEventListener('click', () => this.checkExistingData());
         this.loginBtn.addEventListener('click', () => this.login());
+        this.changeTokenLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showTokenInput();
+        });
         this.logoutBtn.addEventListener('click', () => this.logout());
         this.addBtn.addEventListener('click', () => this.addTodo());
         this.newTodoInput.addEventListener('keypress', (e) => {
@@ -190,10 +198,25 @@ class GitHubTodoApp {
         // Always show login screen - password is never stored
         this.showLoginScreen();
 
-        // Pre-fill token if saved
+        // Pre-fill token if saved and auto-check
         if (this.token) {
             this.tokenInput.value = this.token;
+            this.tokenGroup.classList.add('hidden');
+            this.tokenSavedMsg.classList.remove('hidden');
+            this.checkBtn.classList.add('hidden');
+            // Auto-check if we have a saved token
+            await this.checkExistingData();
         }
+    }
+
+    showTokenInput() {
+        this.tokenGroup.classList.remove('hidden');
+        this.tokenSavedMsg.classList.add('hidden');
+        this.checkBtn.classList.remove('hidden');
+        this.loginBtn.classList.add('hidden');
+        this.confirmPasswordGroup.classList.add('hidden');
+        this.tokenInput.value = '';
+        this.tokenInput.focus();
     }
 
     showLoginScreen() {
@@ -477,6 +500,8 @@ class GitHubTodoApp {
         this.tokenInput.value = '';
         this.passwordInput.value = '';
         this.confirmPasswordInput.value = '';
+        this.tokenGroup.classList.remove('hidden');
+        this.tokenSavedMsg.classList.add('hidden');
         this.confirmPasswordGroup.classList.add('hidden');
         this.checkBtn.classList.remove('hidden');
         this.loginBtn.classList.add('hidden');

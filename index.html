@@ -14,13 +14,17 @@
             <p class="subtitle">Store your todos in a GitHub repository</p>
 
             <div class="setup-form">
-                <div class="form-group">
+                <div class="form-group" id="token-group">
                     <label for="token">GitHub Personal Access Token</label>
-                    <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx">
-                    <small>Needs <code>repo</code> scope. <a href="https://github.com/settings/tokens/new?scopes=repo&description=Todo%20App" target="_blank">Create token</a></small>
+                    <input type="password" id="token" placeholder="github_pat_xxxxxxxxxxxx">
+                    <small>Needs <code>Contents</code> permission. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">Create token</a></small>
                 </div>
 
-                <div class="form-group">
+                <p id="token-saved-msg" class="token-saved hidden">
+                    Using saved token. <a href="#" id="change-token-link">Change token</a>
+                </p>
+
+                <div class="form-group" id="password-group">
                     <label for="encryption-password">Encryption Password</label>
                     <input type="password" id="encryption-password" placeholder="Enter a strong password">
                     <small>Your todos are encrypted with AES-256. Remember this password!</small>
