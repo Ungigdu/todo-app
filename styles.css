@@ -320,6 +320,155 @@ header {
     color: #999;
 }
 
+/* Sync Controls */
+.sync-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.sync-btn {
+    position: relative;
+}
+
+.sync-btn.syncing {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.sync-btn.syncing::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border: 2px solid #667eea;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Action History */
+.action-history {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.action-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.action-history h3 {
+    font-size: 14px;
+    color: #666;
+    font-weight: 600;
+}
+
+.device-id {
+    font-size: 11px;
+    color: #999;
+    background: #f0f0f0;
+    padding: 3px 8px;
+    border-radius: 10px;
+}
+
+#action-list {
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.action-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.action-item.from-other-device {
+    background: #e8f4fd;
+    border-left: 3px solid #667eea;
+}
+
+.action-icon {
+    font-size: 14px;
+    width: 20px;
+    text-align: center;
+}
+
+.action-icon.add { color: #27ae60; }
+.action-icon.toggle { color: #f39c12; }
+.action-icon.delete { color: #e74c3c; }
+.action-icon.clear { color: #9b59b6; }
+
+.action-details {
+    flex: 1;
+}
+
+.action-text {
+    color: #333;
+    margin-bottom: 3px;
+}
+
+.action-meta {
+    font-size: 11px;
+    color: #999;
+}
+
+.action-device {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 5px;
+}
+
+.action-device.other {
+    background: #667eea;
+    color: white;
+}
+
+/* Sync indicator pulse */
+.sync-status.syncing::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #f39c12;
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.sync-status.watching::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #27ae60;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
     .screen {
