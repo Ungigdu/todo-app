@@ -92,6 +92,31 @@
                 </div>
                 <ul id="action-list"></ul>
             </div>
+
+            <!-- Sync Tracker Panel -->
+            <div class="sync-tracker-toggle">
+                <button id="toggle-tracker-btn" class="btn small">Show Sync Tracker</button>
+            </div>
+            <div id="sync-tracker" class="sync-tracker hidden">
+                <div class="sync-tracker-header">
+                    <h3>Sync Tracker</h3>
+                    <div class="tracker-controls">
+                        <button id="clear-tracker-btn" class="btn small">Clear</button>
+                        <button id="copy-tracker-btn" class="btn small">Copy</button>
+                    </div>
+                </div>
+                <div class="tracker-sha-display">
+                    <div class="sha-item">
+                        <span class="sha-label">Local Todos SHA:</span>
+                        <span id="local-todos-sha" class="sha-value">-</span>
+                    </div>
+                    <div class="sha-item">
+                        <span class="sha-label">Local Actions SHA:</span>
+                        <span id="local-actions-sha" class="sha-value">-</span>
+                    </div>
+                </div>
+                <ul id="tracker-log"></ul>
+            </div>
         </div>
     </div>
 
