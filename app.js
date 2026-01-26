@@ -214,6 +214,16 @@ class GitHubTodoApp {
                 this.syncFromRemote();
             }
         });
+
+        // Periodic sync every 30 seconds when page is visible (for side-by-side usage)
+        this.periodicSyncInterval = setInterval(() => {
+            if (document.visibilityState === 'visible' &&
+                this.encryptionPassword &&
+                !this.isSyncing) {
+                syncTracker.info('Periodic auto-sync (30s interval)...');
+                this.syncFromRemote();
+            }
+        }, 30000);
     }
 
     getOrCreateDeviceId() {
