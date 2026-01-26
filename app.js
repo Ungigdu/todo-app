@@ -887,14 +887,34 @@ class GitHubTodoApp {
     }
 
     async githubFetch(url, options = {}) {
-        return fetch(url, {
+        const isGetRequest = !options.method || options.method === 'GET';
+
+        // For GET requests, add cache-busting to avoid stale CDN responses
+        let finalUrl = url;
+        if (isGetRequest) {
+            const cacheBuster = `_cb=${Date.now()}`;
+            finalUrl = url.includes('?') ? `${url}&${cacheBuster}` : `${url}?${cacheBuster}`;
+            syncTracker.info('Cache-busting GET request', { url: finalUrl.substring(0, 80) + '...' });
+        }
+
+        const headers = {
+            'Authorization': `token ${this.token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+
+        // Add cache-control headers for GET requests to bypass CDN caching
+        if (isGetRequest) {
+            headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+            headers['Pragma'] = 'no-cache';
+            // Clear If-None-Match to prevent 304 responses from cache
+            headers['If-None-Match'] = '';
+        }
+
+        return fetch(finalUrl, {
             ...options,
-            headers: {
-                'Authorization': `token ${this.token}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
+            headers
         });
     }
 
