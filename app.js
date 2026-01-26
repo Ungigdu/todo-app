@@ -462,9 +462,15 @@ class GitHubTodoApp {
                 this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
             ]);
 
+            // Use local variables to store the SHAs we'll use for PUT
+            let currentTodosSha = null;
+            let currentActionsSha = null;
+
             // Check for todos conflict and merge if needed
             if (remoteTodosResponse.ok) {
                 const remoteData = await remoteTodosResponse.json();
+                currentTodosSha = remoteData.sha;  // ALWAYS use the fetched SHA
+
                 if (remoteData.sha !== this.fileSha) {
                     // Remote has changed - merge todos
                     console.log('Remote todos changed, merging...');
@@ -472,15 +478,15 @@ class GitHubTodoApp {
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     const remoteTodos = JSON.parse(decrypted);
                     this.todos = this.mergeTodos(remoteTodos, this.todos);
-                    this.fileSha = remoteData.sha;
                 }
-            } else if (remoteTodosResponse.status === 404) {
-                this.fileSha = null;
             }
+            // If 404, currentTodosSha stays null (new file)
 
             // Check for actions conflict and merge if needed
             if (remoteActionsResponse.ok) {
                 const remoteData = await remoteActionsResponse.json();
+                currentActionsSha = remoteData.sha;  // ALWAYS use the fetched SHA
+
                 if (remoteData.sha !== this.actionsSha) {
                     // Remote has changed - merge actions
                     console.log('Remote actions changed, merging...');
@@ -488,11 +494,9 @@ class GitHubTodoApp {
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     const remoteActions = JSON.parse(decrypted);
                     this.actions = this.mergeActions(remoteActions, this.actions);
-                    this.actionsSha = remoteData.sha;
                 }
-            } else if (remoteActionsResponse.status === 404) {
-                this.actionsSha = null;
             }
+            // If 404, currentActionsSha stays null (new file)
 
             this.setSyncStatus('Encrypting & saving...', 'saving');
 
@@ -503,21 +507,21 @@ class GitHubTodoApp {
             const actionsPlaintext = JSON.stringify(this.actions, null, 2);
             const actionsEncrypted = await Crypto.encrypt(actionsPlaintext, this.encryptionPassword);
 
-            // Prepare both requests
+            // Prepare both requests - use the SHAs we fetched, not instance properties
             const todosBody = {
                 message: 'Update encrypted todos',
                 content: btoa(todosEncrypted)
             };
-            if (this.fileSha) {
-                todosBody.sha = this.fileSha;
+            if (currentTodosSha) {
+                todosBody.sha = currentTodosSha;
             }
 
             const actionsBody = {
                 message: 'Update action log',
                 content: btoa(actionsEncrypted)
             };
-            if (this.actionsSha) {
-                actionsBody.sha = this.actionsSha;
+            if (currentActionsSha) {
+                actionsBody.sha = currentActionsSha;
             }
 
             // Save both files
@@ -537,6 +541,7 @@ class GitHubTodoApp {
                 throw new Error(error.message || 'Failed to save todos');
             }
 
+            // Update instance SHAs only after successful save
             const todosData = await todosResponse.json();
             this.fileSha = todosData.content.sha;
 
