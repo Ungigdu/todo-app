@@ -74,7 +74,7 @@ class Crypto {
 
 class GitHubTodoApp {
     constructor() {
-        this.token = localStorage.getItem('github_token');
+        this.token = null;
         this.repo = 'Ungigdu/todo-data'; // Fixed repository
         this.encryptionPassword = null; // Never stored, must be entered each session
         this.user = null;
@@ -140,11 +140,14 @@ class GitHubTodoApp {
         });
     }
 
-    async checkExistingData() {
+    async checkExistingData(autoCheck = false) {
         // Use saved token or get from input
         const token = this.token || this.tokenInput.value.trim();
 
         if (!token) {
+            if (autoCheck) {
+                this.showTokenInput();
+            }
             this.showLoginError('Please enter your GitHub token');
             return;
         }
@@ -175,21 +178,28 @@ class GitHubTodoApp {
                     this.confirmPasswordGroup.classList.add('hidden');
                 }
 
+                // Hide token input, show password-only UI
+                this.tokenGroup.classList.add('hidden');
+                this.tokenSavedMsg.classList.remove('hidden');
                 this.checkBtn.classList.add('hidden');
                 this.loginBtn.classList.remove('hidden');
                 this.showLoginError('');
                 this.passwordInput.focus();
+
+                // Save token on success
+                localStorage.setItem('github_token', token);
             } else {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(`Failed to check data file (${response.status}): ${errorData.message || 'Unknown error'}`);
             }
 
-            // Save token
-            localStorage.setItem('github_token', token);
-
         } catch (error) {
             this.showLoginError(error.message);
             this.token = null;
+            // If this was an auto-check, show token input again
+            if (autoCheck) {
+                this.showTokenInput();
+            }
         } finally {
             this.checkBtn.disabled = false;
             this.checkBtn.textContent = 'Continue';
@@ -200,25 +210,26 @@ class GitHubTodoApp {
         // Always show login screen - password is never stored
         this.showLoginScreen();
 
-        // Pre-fill token if saved and auto-check
-        if (this.token) {
-            this.tokenInput.value = this.token;
+        // Check if we have a saved token
+        const savedToken = localStorage.getItem('github_token');
+
+        if (savedToken) {
+            this.token = savedToken;
+            this.tokenInput.value = savedToken;
+
+            // Immediately hide token group and show loading state
             this.tokenGroup.classList.add('hidden');
             this.tokenSavedMsg.classList.remove('hidden');
             this.checkBtn.classList.add('hidden');
 
-            // Auto-check if we have a saved token
-            try {
-                await this.checkExistingData();
-            } catch (error) {
-                // If auto-check fails, show token input again
-                this.showTokenInput();
-                this.showLoginError('Session expired. Please enter your token again.');
-            }
+            // Auto-verify the saved token
+            await this.checkExistingData(true);
         }
     }
 
     showTokenInput() {
+        localStorage.removeItem('github_token');
+        this.token = null;
         this.tokenGroup.classList.remove('hidden');
         this.tokenSavedMsg.classList.add('hidden');
         this.checkBtn.classList.remove('hidden');
