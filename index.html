@@ -32,7 +32,14 @@
                     <small>Your todos are encrypted with AES-256. Remember this password!</small>
                 </div>
 
-                <button id="login-btn" class="btn primary">Sign In</button>
+                <div class="form-group hidden" id="confirm-password-group">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input type="password" id="confirm-password" placeholder="Re-enter your password">
+                    <small>First-time setup: confirm your encryption password</small>
+                </div>
+
+                <button id="check-btn" class="btn primary">Continue</button>
+                <button id="login-btn" class="btn primary hidden">Sign In</button>
                 <p id="login-error" class="error"></p>
             </div>
         </div>

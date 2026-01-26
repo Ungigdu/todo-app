@@ -97,8 +97,14 @@ class GitHubTodoApp {
         this.tokenInput = document.getElementById('token');
         this.repoInput = document.getElementById('repo');
         this.passwordInput = document.getElementById('encryption-password');
+        this.confirmPasswordGroup = document.getElementById('confirm-password-group');
+        this.confirmPasswordInput = document.getElementById('confirm-password');
+        this.checkBtn = document.getElementById('check-btn');
         this.loginBtn = document.getElementById('login-btn');
         this.loginError = document.getElementById('login-error');
+
+        // State
+        this.isFirstTimeSetup = false;
 
         // Todo elements
         this.userAvatar = document.getElementById('user-avatar');
@@ -114,6 +120,7 @@ class GitHubTodoApp {
     }
 
     bindEvents() {
+        this.checkBtn.addEventListener('click', () => this.checkExistingData());
         this.loginBtn.addEventListener('click', () => this.login());
         this.logoutBtn.addEventListener('click', () => this.logout());
         this.addBtn.addEventListener('click', () => this.addTodo());
@@ -124,6 +131,70 @@ class GitHubTodoApp {
         this.filterBtns.forEach(btn => {
             btn.addEventListener('click', (e) => this.setFilter(e.target.dataset.filter));
         });
+    }
+
+    async checkExistingData() {
+        const token = this.tokenInput.value.trim();
+        const repo = this.repoInput.value.trim();
+
+        if (!token || !repo) {
+            this.showLoginError('Please enter token and repository first');
+            return;
+        }
+
+        if (!repo.includes('/')) {
+            this.showLoginError('Repository should be in format: owner/repo');
+            return;
+        }
+
+        this.checkBtn.disabled = true;
+        this.checkBtn.textContent = 'Checking...';
+        this.loginError.textContent = '';
+
+        try {
+            this.token = token;
+            this.repo = repo;
+
+            await this.verifyToken();
+            await this.ensureRepoAccess();
+
+            // Check if encrypted data already exists
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
+            );
+
+            if (response.ok) {
+                // Data exists - returning user, just need password
+                this.isFirstTimeSetup = false;
+                this.confirmPasswordGroup.classList.add('hidden');
+                this.checkBtn.classList.add('hidden');
+                this.loginBtn.classList.remove('hidden');
+                this.showLoginError('');
+                this.passwordInput.focus();
+            } else if (response.status === 404) {
+                // No data - first time setup, need password confirmation
+                this.isFirstTimeSetup = true;
+                this.confirmPasswordGroup.classList.remove('hidden');
+                this.checkBtn.classList.add('hidden');
+                this.loginBtn.classList.remove('hidden');
+                this.showLoginError('');
+                this.passwordInput.focus();
+            } else {
+                throw new Error('Failed to check repository');
+            }
+
+            // Save token and repo
+            localStorage.setItem('github_token', token);
+            localStorage.setItem('github_repo', repo);
+
+        } catch (error) {
+            this.showLoginError(error.message);
+            this.token = null;
+            this.repo = null;
+        } finally {
+            this.checkBtn.disabled = false;
+            this.checkBtn.textContent = 'Continue';
+        }
     }
 
     async init() {
@@ -154,17 +225,10 @@ class GitHubTodoApp {
     }
 
     async login() {
-        const token = this.tokenInput.value.trim();
-        const repo = this.repoInput.value.trim();
         const password = this.passwordInput.value;
 
-        if (!token || !repo || !password) {
-            this.showLoginError('Please fill in all fields');
-            return;
-        }
-
-        if (!repo.includes('/')) {
-            this.showLoginError('Repository should be in format: owner/repo');
+        if (!password) {
+            this.showLoginError('Please enter your encryption password');
             return;
         }
 
@@ -173,28 +237,26 @@ class GitHubTodoApp {
             return;
         }
 
+        // For first-time setup, validate password confirmation
+        if (this.isFirstTimeSetup) {
+            const confirmPassword = this.confirmPasswordInput.value;
+            if (password !== confirmPassword) {
+                this.showLoginError('Passwords do not match');
+                return;
+            }
+        }
+
         this.loginBtn.disabled = true;
         this.loginBtn.textContent = 'Signing in...';
         this.loginError.textContent = '';
 
         try {
-            this.token = token;
-            this.repo = repo;
             this.encryptionPassword = password;
-
-            await this.verifyToken();
-            await this.ensureRepoAccess();
-
-            // Save token and repo (but NOT the password)
-            localStorage.setItem('github_token', token);
-            localStorage.setItem('github_repo', repo);
 
             await this.loadTodos();
             this.showTodoScreen();
         } catch (error) {
             this.showLoginError(error.message);
-            this.token = null;
-            this.repo = null;
             this.encryptionPassword = null;
         } finally {
             this.loginBtn.disabled = false;
@@ -418,9 +480,14 @@ class GitHubTodoApp {
         this.user = null;
         this.todos = [];
         this.fileSha = null;
+        this.isFirstTimeSetup = false;
         this.tokenInput.value = '';
         this.repoInput.value = '';
         this.passwordInput.value = '';
+        this.confirmPasswordInput.value = '';
+        this.confirmPasswordGroup.classList.add('hidden');
+        this.checkBtn.classList.remove('hidden');
+        this.loginBtn.classList.add('hidden');
         this.showLoginScreen();
     }
 }
