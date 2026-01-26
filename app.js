@@ -75,7 +75,7 @@ class Crypto {
 class GitHubTodoApp {
     constructor() {
         this.token = localStorage.getItem('github_token');
-        this.repo = localStorage.getItem('github_repo');
+        this.repo = 'Ungigdu/todo-data'; // Fixed repository
         this.encryptionPassword = null; // Never stored, must be entered each session
         this.user = null;
         this.todos = [];
@@ -95,7 +95,6 @@ class GitHubTodoApp {
 
         // Login elements
         this.tokenInput = document.getElementById('token');
-        this.repoInput = document.getElementById('repo');
         this.passwordInput = document.getElementById('encryption-password');
         this.confirmPasswordGroup = document.getElementById('confirm-password-group');
         this.confirmPasswordInput = document.getElementById('confirm-password');
@@ -135,15 +134,9 @@ class GitHubTodoApp {
 
     async checkExistingData() {
         const token = this.tokenInput.value.trim();
-        const repo = this.repoInput.value.trim();
 
-        if (!token || !repo) {
-            this.showLoginError('Please enter token and repository first');
-            return;
-        }
-
-        if (!repo.includes('/')) {
-            this.showLoginError('Repository should be in format: owner/repo');
+        if (!token) {
+            this.showLoginError('Please enter your GitHub token');
             return;
         }
 
@@ -153,7 +146,6 @@ class GitHubTodoApp {
 
         try {
             this.token = token;
-            this.repo = repo;
 
             await this.verifyToken();
             await this.ensureRepoAccess();
@@ -183,14 +175,12 @@ class GitHubTodoApp {
                 throw new Error('Failed to check repository');
             }
 
-            // Save token and repo
+            // Save token
             localStorage.setItem('github_token', token);
-            localStorage.setItem('github_repo', repo);
 
         } catch (error) {
             this.showLoginError(error.message);
             this.token = null;
-            this.repo = null;
         } finally {
             this.checkBtn.disabled = false;
             this.checkBtn.textContent = 'Continue';
@@ -201,12 +191,9 @@ class GitHubTodoApp {
         // Always show login screen - password is never stored
         this.showLoginScreen();
 
-        // Pre-fill token and repo if saved
+        // Pre-fill token if saved
         if (this.token) {
             this.tokenInput.value = this.token;
-        }
-        if (this.repo) {
-            this.repoInput.value = this.repo;
         }
     }
 
@@ -473,16 +460,13 @@ class GitHubTodoApp {
 
     logout() {
         localStorage.removeItem('github_token');
-        localStorage.removeItem('github_repo');
         this.token = null;
-        this.repo = null;
         this.encryptionPassword = null;
         this.user = null;
         this.todos = [];
         this.fileSha = null;
         this.isFirstTimeSetup = false;
         this.tokenInput.value = '';
-        this.repoInput.value = '';
         this.passwordInput.value = '';
         this.confirmPasswordInput.value = '';
         this.confirmPasswordGroup.classList.add('hidden');
