@@ -258,18 +258,27 @@ class GitHubTodoApp {
     async verifyToken() {
         const response = await this.githubFetch('https://api.github.com/user');
         if (!response.ok) {
-            throw new Error('Invalid token or API error');
+            if (response.status === 401) {
+                throw new Error('Invalid token. Please check and try again.');
+            }
+            throw new Error(`Token verification failed: ${response.status}`);
         }
         this.user = await response.json();
+        console.log('Authenticated as:', this.user.login);
     }
 
     async ensureRepoAccess() {
         const response = await this.githubFetch(`https://api.github.com/repos/${this.repo}`);
         if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
             if (response.status === 404) {
-                throw new Error('Repository not found. Make sure it exists and you have access.');
+                throw new Error(`Repository not found (404). Check that your token has "Contents" permission for ${this.repo}`);
+            } else if (response.status === 401) {
+                throw new Error('Invalid token (401). Please check your token.');
+            } else if (response.status === 403) {
+                throw new Error(`Access forbidden (403). ${errorData.message || 'Token may lack required permissions.'}`);
             }
-            throw new Error('Cannot access repository');
+            throw new Error(`Cannot access repository: ${response.status} - ${errorData.message || 'Unknown error'}`);
         }
     }
 
