@@ -75,7 +75,7 @@ class Crypto {
 class GitHubTodoApp {
     constructor() {
         this.token = null;
-        this.repo = 'Ungigdu/todo-data'; // Fixed repository
+        this.repo = null;
         this.encryptionPassword = null; // Never stored, must be entered each session
         this.user = null;
         this.todos = [];
@@ -96,8 +96,11 @@ class GitHubTodoApp {
         // Login elements
         this.tokenGroup = document.getElementById('token-group');
         this.tokenInput = document.getElementById('token');
-        this.tokenSavedMsg = document.getElementById('token-saved-msg');
-        this.changeTokenLink = document.getElementById('change-token-link');
+        this.repoGroup = document.getElementById('repo-group');
+        this.repoInput = document.getElementById('repo');
+        this.savedSettingsMsg = document.getElementById('saved-settings-msg');
+        this.savedRepoDisplay = document.getElementById('saved-repo-display');
+        this.changeSettingsLink = document.getElementById('change-settings-link');
         this.passwordGroup = document.getElementById('password-group');
         this.passwordInput = document.getElementById('encryption-password');
         this.confirmPasswordGroup = document.getElementById('confirm-password-group');
@@ -125,9 +128,9 @@ class GitHubTodoApp {
     bindEvents() {
         this.checkBtn.addEventListener('click', () => this.checkExistingData());
         this.loginBtn.addEventListener('click', () => this.login());
-        this.changeTokenLink.addEventListener('click', (e) => {
+        this.changeSettingsLink.addEventListener('click', (e) => {
             e.preventDefault();
-            this.showTokenInput();
+            this.showSettingsInput();
         });
         this.logoutBtn.addEventListener('click', () => this.logout());
         this.addBtn.addEventListener('click', () => this.addTodo());
@@ -141,14 +144,20 @@ class GitHubTodoApp {
     }
 
     async checkExistingData(autoCheck = false) {
-        // Use saved token or get from input
+        // Use saved values or get from input
         const token = this.token || this.tokenInput.value.trim();
+        const repo = this.repo || this.repoInput.value.trim();
 
-        if (!token) {
+        if (!token || !repo) {
             if (autoCheck) {
-                this.showTokenInput();
+                this.showSettingsInput();
             }
-            this.showLoginError('Please enter your GitHub token');
+            this.showLoginError('Please enter your GitHub token and repository');
+            return;
+        }
+
+        if (!repo.includes('/')) {
+            this.showLoginError('Repository should be in format: owner/repo');
             return;
         }
 
@@ -158,7 +167,9 @@ class GitHubTodoApp {
 
         try {
             this.token = token;
+            this.repo = repo;
             this.tokenInput.value = token;
+            this.repoInput.value = repo;
 
             await this.verifyToken();
             await this.ensureRepoAccess();
@@ -178,16 +189,19 @@ class GitHubTodoApp {
                     this.confirmPasswordGroup.classList.add('hidden');
                 }
 
-                // Hide token input, show password-only UI
+                // Hide settings input, show password-only UI
                 this.tokenGroup.classList.add('hidden');
-                this.tokenSavedMsg.classList.remove('hidden');
+                this.repoGroup.classList.add('hidden');
+                this.savedSettingsMsg.classList.remove('hidden');
+                this.savedRepoDisplay.textContent = `Repo: ${repo}`;
                 this.checkBtn.classList.add('hidden');
                 this.loginBtn.classList.remove('hidden');
                 this.showLoginError('');
                 this.passwordInput.focus();
 
-                // Save token on success
+                // Save settings on success
                 localStorage.setItem('github_token', token);
+                localStorage.setItem('github_repo', repo);
             } else {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(`Failed to check data file (${response.status}): ${errorData.message || 'Unknown error'}`);
@@ -196,9 +210,10 @@ class GitHubTodoApp {
         } catch (error) {
             this.showLoginError(error.message);
             this.token = null;
-            // If this was an auto-check, show token input again
+            this.repo = null;
+            // If this was an auto-check, show settings input again
             if (autoCheck) {
-                this.showTokenInput();
+                this.showSettingsInput();
             }
         } finally {
             this.checkBtn.disabled = false;
@@ -210,32 +225,41 @@ class GitHubTodoApp {
         // Always show login screen - password is never stored
         this.showLoginScreen();
 
-        // Check if we have a saved token
+        // Check if we have saved settings
         const savedToken = localStorage.getItem('github_token');
+        const savedRepo = localStorage.getItem('github_repo');
 
-        if (savedToken) {
+        if (savedToken && savedRepo) {
             this.token = savedToken;
+            this.repo = savedRepo;
             this.tokenInput.value = savedToken;
+            this.repoInput.value = savedRepo;
 
-            // Immediately hide token group and show loading state
+            // Immediately hide settings and show loading state
             this.tokenGroup.classList.add('hidden');
-            this.tokenSavedMsg.classList.remove('hidden');
+            this.repoGroup.classList.add('hidden');
+            this.savedSettingsMsg.classList.remove('hidden');
+            this.savedRepoDisplay.textContent = `Repo: ${savedRepo}`;
             this.checkBtn.classList.add('hidden');
 
-            // Auto-verify the saved token
+            // Auto-verify the saved settings
             await this.checkExistingData(true);
         }
     }
 
-    showTokenInput() {
+    showSettingsInput() {
         localStorage.removeItem('github_token');
+        localStorage.removeItem('github_repo');
         this.token = null;
+        this.repo = null;
         this.tokenGroup.classList.remove('hidden');
-        this.tokenSavedMsg.classList.add('hidden');
+        this.repoGroup.classList.remove('hidden');
+        this.savedSettingsMsg.classList.add('hidden');
         this.checkBtn.classList.remove('hidden');
         this.loginBtn.classList.add('hidden');
         this.confirmPasswordGroup.classList.add('hidden');
         this.tokenInput.value = '';
+        this.repoInput.value = '';
         this.tokenInput.focus();
     }
 
@@ -511,17 +535,21 @@ class GitHubTodoApp {
 
     logout() {
         localStorage.removeItem('github_token');
+        localStorage.removeItem('github_repo');
         this.token = null;
+        this.repo = null;
         this.encryptionPassword = null;
         this.user = null;
         this.todos = [];
         this.fileSha = null;
         this.isFirstTimeSetup = false;
         this.tokenInput.value = '';
+        this.repoInput.value = '';
         this.passwordInput.value = '';
         this.confirmPasswordInput.value = '';
         this.tokenGroup.classList.remove('hidden');
-        this.tokenSavedMsg.classList.add('hidden');
+        this.repoGroup.classList.remove('hidden');
+        this.savedSettingsMsg.classList.add('hidden');
         this.confirmPasswordGroup.classList.add('hidden');
         this.checkBtn.classList.remove('hidden');
         this.loginBtn.classList.add('hidden');
