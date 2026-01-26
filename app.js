@@ -85,8 +85,6 @@ class GitHubTodoApp {
         this.actionsFile = 'actions.encrypted';
 
         // Sync settings
-        this.syncInterval = null;
-        this.syncIntervalMs = 30000; // Check for changes every 30 seconds
         this.isSyncing = false;
         this.actionsSha = null;
         this.actions = [];
@@ -329,9 +327,6 @@ class GitHubTodoApp {
         if (this.deviceIdDisplay) {
             this.deviceIdDisplay.textContent = `${this.getDeviceDisplayName()} (${this.deviceId.slice(-6)})`;
         }
-
-        // Start sync interval
-        this.startSyncInterval();
     }
 
     async login() {
@@ -442,7 +437,7 @@ class GitHubTodoApp {
 
             this.renderTodos();
             this.renderActions();
-            this.setSyncStatus('Watching for changes...', 'watching');
+            this.setSyncStatus('Synced', 'saved');
         } catch (error) {
             console.error('Load error:', error);
             if (error.message.includes('Decryption failed')) {
@@ -454,12 +449,52 @@ class GitHubTodoApp {
     }
 
     async saveTodos(action = null) {
-        this.setSyncStatus('Encrypting & saving...', 'saving');
+        this.setSyncStatus('Checking remote state...', 'saving');
         try {
             // Record the action if provided
             if (action) {
                 this.recordAction(action);
             }
+
+            // First, fetch current remote state to check for conflicts
+            const [remoteTodosResponse, remoteActionsResponse] = await Promise.all([
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
+            ]);
+
+            // Check for todos conflict and merge if needed
+            if (remoteTodosResponse.ok) {
+                const remoteData = await remoteTodosResponse.json();
+                if (remoteData.sha !== this.fileSha) {
+                    // Remote has changed - merge todos
+                    console.log('Remote todos changed, merging...');
+                    const encryptedContent = atob(remoteData.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    const remoteTodos = JSON.parse(decrypted);
+                    this.todos = this.mergeTodos(remoteTodos, this.todos);
+                    this.fileSha = remoteData.sha;
+                }
+            } else if (remoteTodosResponse.status === 404) {
+                this.fileSha = null;
+            }
+
+            // Check for actions conflict and merge if needed
+            if (remoteActionsResponse.ok) {
+                const remoteData = await remoteActionsResponse.json();
+                if (remoteData.sha !== this.actionsSha) {
+                    // Remote has changed - merge actions
+                    console.log('Remote actions changed, merging...');
+                    const encryptedContent = atob(remoteData.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    const remoteActions = JSON.parse(decrypted);
+                    this.actions = this.mergeActions(remoteActions, this.actions);
+                    this.actionsSha = remoteData.sha;
+                }
+            } else if (remoteActionsResponse.status === 404) {
+                this.actionsSha = null;
+            }
+
+            this.setSyncStatus('Encrypting & saving...', 'saving');
 
             // Encrypt todos and actions
             const todosPlaintext = JSON.stringify(this.todos, null, 2);
@@ -510,12 +545,54 @@ class GitHubTodoApp {
                 this.actionsSha = actionsData.content.sha;
             }
 
+            this.renderTodos();
             this.renderActions();
-            this.setSyncStatus('Watching for changes...', 'watching');
+            this.setSyncStatus('Saved', 'saved');
         } catch (error) {
             console.error('Save error:', error);
             this.setSyncStatus('Failed to save: ' + error.message, 'error');
         }
+    }
+
+    mergeTodos(remoteTodos, localTodos) {
+        // Create a map of all todos by ID
+        const todoMap = new Map();
+
+        // Add remote todos first
+        for (const todo of remoteTodos) {
+            todoMap.set(todo.id, todo);
+        }
+
+        // Merge local todos - local changes take precedence for existing items
+        for (const todo of localTodos) {
+            todoMap.set(todo.id, todo);
+        }
+
+        // Convert back to array and sort by createdAt (newest first)
+        const merged = Array.from(todoMap.values());
+        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        return merged;
+    }
+
+    mergeActions(remoteActions, localActions) {
+        // Create a map of all actions by ID
+        const actionMap = new Map();
+
+        // Add all actions
+        for (const action of remoteActions) {
+            actionMap.set(action.id, action);
+        }
+        for (const action of localActions) {
+            actionMap.set(action.id, action);
+        }
+
+        // Convert back to array and sort by timestamp (newest first)
+        const merged = Array.from(actionMap.values());
+        merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Keep only the last 50 actions
+        return merged.slice(0, 50);
     }
 
     recordAction(action) {
@@ -673,50 +750,6 @@ class GitHubTodoApp {
     }
 
     // Sync Methods
-    startSyncInterval() {
-        // Clear any existing interval
-        this.stopSyncInterval();
-
-        // Start polling for changes
-        this.syncInterval = setInterval(() => {
-            this.checkForRemoteChanges();
-        }, this.syncIntervalMs);
-
-        console.log(`Sync interval started (every ${this.syncIntervalMs / 1000}s)`);
-    }
-
-    stopSyncInterval() {
-        if (this.syncInterval) {
-            clearInterval(this.syncInterval);
-            this.syncInterval = null;
-            console.log('Sync interval stopped');
-        }
-    }
-
-    async checkForRemoteChanges() {
-        if (this.isSyncing) return;
-
-        try {
-            // Check if the remote file has changed by comparing SHA
-            const response = await this.githubFetch(
-                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-                const remoteSha = data.sha;
-
-                // If SHA differs, remote has new changes
-                if (remoteSha !== this.fileSha) {
-                    console.log('Remote changes detected, syncing...');
-                    await this.syncFromRemote();
-                }
-            }
-        } catch (error) {
-            console.error('Error checking for remote changes:', error);
-        }
-    }
-
     async syncFromRemote() {
         if (this.isSyncing) return;
 
@@ -753,7 +786,7 @@ class GitHubTodoApp {
 
             this.renderTodos();
             this.renderActions();
-            this.setSyncStatus('Watching for changes...', 'watching');
+            this.setSyncStatus('Synced', 'saved');
 
         } catch (error) {
             console.error('Sync error:', error);
@@ -835,9 +868,6 @@ class GitHubTodoApp {
     }
 
     logout() {
-        // Stop sync interval
-        this.stopSyncInterval();
-
         localStorage.removeItem('github_token');
         localStorage.removeItem('github_repo');
         this.token = null;
