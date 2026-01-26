@@ -155,24 +155,23 @@ class GitHubTodoApp {
                 `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
             );
 
-            if (response.ok) {
-                // Data exists - returning user, just need password
-                this.isFirstTimeSetup = false;
-                this.confirmPasswordGroup.classList.add('hidden');
-                this.checkBtn.classList.add('hidden');
-                this.loginBtn.classList.remove('hidden');
-                this.showLoginError('');
-                this.passwordInput.focus();
-            } else if (response.status === 404) {
-                // No data - first time setup, need password confirmation
-                this.isFirstTimeSetup = true;
-                this.confirmPasswordGroup.classList.remove('hidden');
+            if (response.ok || response.status === 404) {
+                // 200 = data exists (returning user), 404 = no data yet (first time)
+                this.isFirstTimeSetup = response.status === 404;
+
+                if (this.isFirstTimeSetup) {
+                    this.confirmPasswordGroup.classList.remove('hidden');
+                } else {
+                    this.confirmPasswordGroup.classList.add('hidden');
+                }
+
                 this.checkBtn.classList.add('hidden');
                 this.loginBtn.classList.remove('hidden');
                 this.showLoginError('');
                 this.passwordInput.focus();
             } else {
-                throw new Error('Failed to check repository');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Failed to check data file (${response.status}): ${errorData.message || 'Unknown error'}`);
             }
 
             // Save token
