@@ -141,7 +141,8 @@ class GitHubTodoApp {
     }
 
     async checkExistingData() {
-        const token = this.tokenInput.value.trim();
+        // Use saved token or get from input
+        const token = this.token || this.tokenInput.value.trim();
 
         if (!token) {
             this.showLoginError('Please enter your GitHub token');
@@ -154,6 +155,7 @@ class GitHubTodoApp {
 
         try {
             this.token = token;
+            this.tokenInput.value = token;
 
             await this.verifyToken();
             await this.ensureRepoAccess();
@@ -204,8 +206,15 @@ class GitHubTodoApp {
             this.tokenGroup.classList.add('hidden');
             this.tokenSavedMsg.classList.remove('hidden');
             this.checkBtn.classList.add('hidden');
+
             // Auto-check if we have a saved token
-            await this.checkExistingData();
+            try {
+                await this.checkExistingData();
+            } catch (error) {
+                // If auto-check fails, show token input again
+                this.showTokenInput();
+                this.showLoginError('Session expired. Please enter your token again.');
+            }
         }
     }
 
