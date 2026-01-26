@@ -79,6 +79,19 @@
             </div>
 
             <p id="sync-status" class="sync-status"></p>
+
+            <div class="sync-controls">
+                <button id="sync-now-btn" class="btn small sync-btn">Sync Now</button>
+                <button id="toggle-history-btn" class="btn small">Action History</button>
+            </div>
+
+            <div id="action-history" class="action-history hidden">
+                <div class="action-history-header">
+                    <h3>Recent Actions</h3>
+                    <span id="device-id-display" class="device-id"></span>
+                </div>
+                <ul id="action-list"></ul>
+            </div>
         </div>
     </div>
 

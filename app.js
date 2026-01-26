@@ -82,10 +82,44 @@ class GitHubTodoApp {
         this.currentFilter = 'all';
         this.fileSha = null;
         this.dataFile = 'todos.encrypted';
+        this.actionsFile = 'actions.encrypted';
+
+        // Sync settings
+        this.syncInterval = null;
+        this.syncIntervalMs = 30000; // Check for changes every 30 seconds
+        this.isSyncing = false;
+        this.actionsSha = null;
+        this.actions = [];
+        this.maxActionsToShow = 20;
+
+        // Device ID - unique per device, persisted
+        this.deviceId = this.getOrCreateDeviceId();
 
         this.initElements();
         this.bindEvents();
         this.init();
+    }
+
+    getOrCreateDeviceId() {
+        let deviceId = localStorage.getItem('device_id');
+        if (!deviceId) {
+            // Generate a short unique ID for this device
+            deviceId = 'dev_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+            localStorage.setItem('device_id', deviceId);
+        }
+        return deviceId;
+    }
+
+    getDeviceDisplayName() {
+        // Try to get a friendly device name
+        const ua = navigator.userAgent;
+        if (/iPhone/.test(ua)) return 'iPhone';
+        if (/iPad/.test(ua)) return 'iPad';
+        if (/Android/.test(ua)) return 'Android';
+        if (/Mac/.test(ua)) return 'Mac';
+        if (/Windows/.test(ua)) return 'Windows';
+        if (/Linux/.test(ua)) return 'Linux';
+        return 'Device';
     }
 
     initElements() {
@@ -123,6 +157,13 @@ class GitHubTodoApp {
         this.clearCompletedBtn = document.getElementById('clear-completed');
         this.syncStatus = document.getElementById('sync-status');
         this.filterBtns = document.querySelectorAll('.filter-btn');
+
+        // Sync elements
+        this.syncNowBtn = document.getElementById('sync-now-btn');
+        this.toggleHistoryBtn = document.getElementById('toggle-history-btn');
+        this.actionHistory = document.getElementById('action-history');
+        this.actionList = document.getElementById('action-list');
+        this.deviceIdDisplay = document.getElementById('device-id-display');
     }
 
     bindEvents() {
@@ -141,6 +182,14 @@ class GitHubTodoApp {
         this.filterBtns.forEach(btn => {
             btn.addEventListener('click', (e) => this.setFilter(e.target.dataset.filter));
         });
+
+        // Sync events
+        if (this.syncNowBtn) {
+            this.syncNowBtn.addEventListener('click', () => this.manualSync());
+        }
+        if (this.toggleHistoryBtn) {
+            this.toggleHistoryBtn.addEventListener('click', () => this.toggleActionHistory());
+        }
     }
 
     async checkExistingData(autoCheck = false) {
@@ -275,6 +324,14 @@ class GitHubTodoApp {
             this.userAvatar.src = this.user.avatar_url;
             this.userName.textContent = this.user.login;
         }
+
+        // Display device ID
+        if (this.deviceIdDisplay) {
+            this.deviceIdDisplay.textContent = `${this.getDeviceDisplayName()} (${this.deviceId.slice(-6)})`;
+        }
+
+        // Start sync interval
+        this.startSyncInterval();
     }
 
     async login() {
@@ -351,28 +408,41 @@ class GitHubTodoApp {
     async loadTodos() {
         this.setSyncStatus('Loading...', '');
         try {
-            const response = await this.githubFetch(
-                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
-            );
+            // Load todos and actions in parallel
+            const [todosResponse, actionsResponse] = await Promise.all([
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
+            ]);
 
-            if (response.ok) {
-                const data = await response.json();
+            // Load todos
+            if (todosResponse.ok) {
+                const data = await todosResponse.json();
                 this.fileSha = data.sha;
                 const encryptedContent = atob(data.content);
-
-                // Decrypt the content
                 const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                 this.todos = JSON.parse(decrypted);
-            } else if (response.status === 404) {
-                // File doesn't exist yet, start with empty todos
+            } else if (todosResponse.status === 404) {
                 this.todos = [];
                 this.fileSha = null;
             } else {
                 throw new Error('Failed to load todos');
             }
 
+            // Load actions
+            if (actionsResponse.ok) {
+                const data = await actionsResponse.json();
+                this.actionsSha = data.sha;
+                const encryptedContent = atob(data.content);
+                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                this.actions = JSON.parse(decrypted);
+            } else if (actionsResponse.status === 404) {
+                this.actions = [];
+                this.actionsSha = null;
+            }
+
             this.renderTodos();
-            this.setSyncStatus('Synced with GitHub (encrypted)', 'saved');
+            this.renderActions();
+            this.setSyncStatus('Watching for changes...', 'watching');
         } catch (error) {
             console.error('Load error:', error);
             if (error.message.includes('Decryption failed')) {
@@ -383,42 +453,87 @@ class GitHubTodoApp {
         }
     }
 
-    async saveTodos() {
+    async saveTodos(action = null) {
         this.setSyncStatus('Encrypting & saving...', 'saving');
         try {
-            // Encrypt the todos
-            const plaintext = JSON.stringify(this.todos, null, 2);
-            const encrypted = await Crypto.encrypt(plaintext, this.encryptionPassword);
+            // Record the action if provided
+            if (action) {
+                this.recordAction(action);
+            }
 
-            const content = btoa(encrypted);
-            const body = {
+            // Encrypt todos and actions
+            const todosPlaintext = JSON.stringify(this.todos, null, 2);
+            const todosEncrypted = await Crypto.encrypt(todosPlaintext, this.encryptionPassword);
+
+            const actionsPlaintext = JSON.stringify(this.actions, null, 2);
+            const actionsEncrypted = await Crypto.encrypt(actionsPlaintext, this.encryptionPassword);
+
+            // Prepare both requests
+            const todosBody = {
                 message: 'Update encrypted todos',
-                content: content
+                content: btoa(todosEncrypted)
             };
-
             if (this.fileSha) {
-                body.sha = this.fileSha;
+                todosBody.sha = this.fileSha;
             }
 
-            const response = await this.githubFetch(
-                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`,
-                {
-                    method: 'PUT',
-                    body: JSON.stringify(body)
-                }
-            );
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to save');
+            const actionsBody = {
+                message: 'Update action log',
+                content: btoa(actionsEncrypted)
+            };
+            if (this.actionsSha) {
+                actionsBody.sha = this.actionsSha;
             }
 
-            const data = await response.json();
-            this.fileSha = data.content.sha;
-            this.setSyncStatus('Encrypted & saved to GitHub', 'saved');
+            // Save both files
+            const [todosResponse, actionsResponse] = await Promise.all([
+                this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`,
+                    { method: 'PUT', body: JSON.stringify(todosBody) }
+                ),
+                this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`,
+                    { method: 'PUT', body: JSON.stringify(actionsBody) }
+                )
+            ]);
+
+            if (!todosResponse.ok) {
+                const error = await todosResponse.json();
+                throw new Error(error.message || 'Failed to save todos');
+            }
+
+            const todosData = await todosResponse.json();
+            this.fileSha = todosData.content.sha;
+
+            if (actionsResponse.ok) {
+                const actionsData = await actionsResponse.json();
+                this.actionsSha = actionsData.content.sha;
+            }
+
+            this.renderActions();
+            this.setSyncStatus('Watching for changes...', 'watching');
         } catch (error) {
             console.error('Save error:', error);
             this.setSyncStatus('Failed to save: ' + error.message, 'error');
+        }
+    }
+
+    recordAction(action) {
+        const actionRecord = {
+            id: Date.now().toString(),
+            type: action.type,
+            description: action.description,
+            deviceId: this.deviceId,
+            deviceName: this.getDeviceDisplayName(),
+            timestamp: new Date().toISOString(),
+            todoId: action.todoId || null
+        };
+
+        this.actions.unshift(actionRecord);
+
+        // Keep only the last 50 actions
+        if (this.actions.length > 50) {
+            this.actions = this.actions.slice(0, 50);
         }
     }
 
@@ -453,7 +568,11 @@ class GitHubTodoApp {
         this.todos.unshift(todo);
         this.newTodoInput.value = '';
         this.renderTodos();
-        this.saveTodos();
+        this.saveTodos({
+            type: 'add',
+            description: `Added "${this.truncateText(text, 30)}"`,
+            todoId: todo.id
+        });
     }
 
     toggleTodo(id) {
@@ -461,20 +580,40 @@ class GitHubTodoApp {
         if (todo) {
             todo.completed = !todo.completed;
             this.renderTodos();
-            this.saveTodos();
+            this.saveTodos({
+                type: 'toggle',
+                description: `${todo.completed ? 'Completed' : 'Uncompleted'} "${this.truncateText(todo.text, 30)}"`,
+                todoId: id
+            });
         }
     }
 
     deleteTodo(id) {
+        const todo = this.todos.find(t => t.id === id);
+        const text = todo ? todo.text : 'item';
         this.todos = this.todos.filter(t => t.id !== id);
         this.renderTodos();
-        this.saveTodos();
+        this.saveTodos({
+            type: 'delete',
+            description: `Deleted "${this.truncateText(text, 30)}"`,
+            todoId: id
+        });
     }
 
     clearCompleted() {
+        const count = this.todos.filter(t => t.completed).length;
+        if (count === 0) return;
+
         this.todos = this.todos.filter(t => !t.completed);
         this.renderTodos();
-        this.saveTodos();
+        this.saveTodos({
+            type: 'clear',
+            description: `Cleared ${count} completed item${count !== 1 ? 's' : ''}`
+        });
+    }
+
+    truncateText(text, maxLength) {
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
     }
 
     setFilter(filter) {
@@ -533,7 +672,172 @@ class GitHubTodoApp {
         return div.innerHTML;
     }
 
+    // Sync Methods
+    startSyncInterval() {
+        // Clear any existing interval
+        this.stopSyncInterval();
+
+        // Start polling for changes
+        this.syncInterval = setInterval(() => {
+            this.checkForRemoteChanges();
+        }, this.syncIntervalMs);
+
+        console.log(`Sync interval started (every ${this.syncIntervalMs / 1000}s)`);
+    }
+
+    stopSyncInterval() {
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+            console.log('Sync interval stopped');
+        }
+    }
+
+    async checkForRemoteChanges() {
+        if (this.isSyncing) return;
+
+        try {
+            // Check if the remote file has changed by comparing SHA
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                const remoteSha = data.sha;
+
+                // If SHA differs, remote has new changes
+                if (remoteSha !== this.fileSha) {
+                    console.log('Remote changes detected, syncing...');
+                    await this.syncFromRemote();
+                }
+            }
+        } catch (error) {
+            console.error('Error checking for remote changes:', error);
+        }
+    }
+
+    async syncFromRemote() {
+        if (this.isSyncing) return;
+
+        this.isSyncing = true;
+        this.setSyncStatus('Syncing changes...', 'syncing');
+
+        if (this.syncNowBtn) {
+            this.syncNowBtn.classList.add('syncing');
+            this.syncNowBtn.textContent = 'Syncing...';
+        }
+
+        try {
+            // Load both todos and actions from remote
+            const [todosResponse, actionsResponse] = await Promise.all([
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
+            ]);
+
+            if (todosResponse.ok) {
+                const data = await todosResponse.json();
+                this.fileSha = data.sha;
+                const encryptedContent = atob(data.content);
+                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                this.todos = JSON.parse(decrypted);
+            }
+
+            if (actionsResponse.ok) {
+                const data = await actionsResponse.json();
+                this.actionsSha = data.sha;
+                const encryptedContent = atob(data.content);
+                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                this.actions = JSON.parse(decrypted);
+            }
+
+            this.renderTodos();
+            this.renderActions();
+            this.setSyncStatus('Watching for changes...', 'watching');
+
+        } catch (error) {
+            console.error('Sync error:', error);
+            this.setSyncStatus('Sync failed: ' + error.message, 'error');
+        } finally {
+            this.isSyncing = false;
+            if (this.syncNowBtn) {
+                this.syncNowBtn.classList.remove('syncing');
+                this.syncNowBtn.textContent = 'Sync Now';
+            }
+        }
+    }
+
+    async manualSync() {
+        await this.syncFromRemote();
+    }
+
+    toggleActionHistory() {
+        if (this.actionHistory) {
+            this.actionHistory.classList.toggle('hidden');
+            if (this.toggleHistoryBtn) {
+                const isHidden = this.actionHistory.classList.contains('hidden');
+                this.toggleHistoryBtn.textContent = isHidden ? 'Action History' : 'Hide History';
+            }
+        }
+    }
+
+    renderActions() {
+        if (!this.actionList) return;
+
+        const actionsToShow = this.actions.slice(0, this.maxActionsToShow);
+
+        if (actionsToShow.length === 0) {
+            this.actionList.innerHTML = '<li class="empty-state">No actions recorded yet</li>';
+            return;
+        }
+
+        this.actionList.innerHTML = actionsToShow.map(action => {
+            const isOtherDevice = action.deviceId !== this.deviceId;
+            const timeAgo = this.getTimeAgo(new Date(action.timestamp));
+            const icon = this.getActionIcon(action.type);
+
+            return `
+                <li class="action-item ${isOtherDevice ? 'from-other-device' : ''}">
+                    <span class="action-icon ${action.type}">${icon}</span>
+                    <div class="action-details">
+                        <div class="action-text">${this.escapeHtml(action.description)}</div>
+                        <div class="action-meta">
+                            ${timeAgo}
+                            <span class="action-device ${isOtherDevice ? 'other' : ''}">
+                                ${action.deviceName || 'Unknown'}${isOtherDevice ? '' : ' (this device)'}
+                            </span>
+                        </div>
+                    </div>
+                </li>
+            `;
+        }).join('');
+    }
+
+    getActionIcon(type) {
+        switch (type) {
+            case 'add': return '+';
+            case 'toggle': return '✓';
+            case 'delete': return '×';
+            case 'clear': return '⌫';
+            default: return '•';
+        }
+    }
+
+    getTimeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+
+        return date.toLocaleDateString();
+    }
+
     logout() {
+        // Stop sync interval
+        this.stopSyncInterval();
+
         localStorage.removeItem('github_token');
         localStorage.removeItem('github_repo');
         this.token = null;
@@ -541,7 +845,9 @@ class GitHubTodoApp {
         this.encryptionPassword = null;
         this.user = null;
         this.todos = [];
+        this.actions = [];
         this.fileSha = null;
+        this.actionsSha = null;
         this.isFirstTimeSetup = false;
         if (this.tokenInput) this.tokenInput.value = '';
         if (this.repoInput) this.repoInput.value = '';
@@ -553,6 +859,8 @@ class GitHubTodoApp {
         if (this.confirmPasswordGroup) this.confirmPasswordGroup.classList.add('hidden');
         if (this.checkBtn) this.checkBtn.classList.remove('hidden');
         if (this.loginBtn) this.loginBtn.classList.add('hidden');
+        if (this.actionHistory) this.actionHistory.classList.add('hidden');
+        if (this.toggleHistoryBtn) this.toggleHistoryBtn.textContent = 'Action History';
         this.showLoginScreen();
     }
 }
