@@ -194,6 +194,26 @@ class GitHubTodoApp {
         // Initialize sync tracker
         syncTracker.init();
         syncTracker.info('App initialized', { deviceId: this.deviceId, deviceName: this.getDeviceDisplayName() });
+
+        // Auto-sync when page becomes visible (user switches back to tab/app)
+        this.setupVisibilitySync();
+    }
+
+    setupVisibilitySync() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && this.encryptionPassword) {
+                syncTracker.info('Page became visible - auto-syncing...');
+                this.syncFromRemote();
+            }
+        });
+
+        // Also sync on window focus (some mobile browsers don't fire visibilitychange)
+        window.addEventListener('focus', () => {
+            if (this.encryptionPassword && !this.isSyncing) {
+                syncTracker.info('Window focused - auto-syncing...');
+                this.syncFromRemote();
+            }
+        });
     }
 
     getOrCreateDeviceId() {
