@@ -935,9 +935,49 @@ class GitHubTodoApp {
         this.syncStatus.className = 'sync-status ' + className;
     }
 
-    addTodo() {
+    // Quick sync before actions - fetches latest state without full UI update
+    async syncBeforeAction() {
+        if (this.isSyncing) {
+            syncTracker.info('Waiting for existing sync to complete...');
+            // Wait a bit for existing sync to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return;
+        }
+
+        syncTracker.info('Pre-action sync: fetching latest state...');
+        try {
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.sha !== this.fileSha) {
+                    syncTracker.info('Pre-action sync: remote has newer data, updating local state', {
+                        localSha: this.fileSha ? this.fileSha.substring(0, 12) : null,
+                        remoteSha: data.sha.substring(0, 12)
+                    });
+                    const encryptedContent = atob(data.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    this.todos = JSON.parse(decrypted);
+                    this.fileSha = data.sha;
+                    this.renderTodos();
+                    syncTracker.success('Pre-action sync: local state updated');
+                } else {
+                    syncTracker.info('Pre-action sync: already up to date');
+                }
+            }
+        } catch (error) {
+            syncTracker.warning('Pre-action sync failed, proceeding anyway', { error: error.message });
+        }
+    }
+
+    async addTodo() {
         const text = this.newTodoInput.value.trim();
         if (!text) return;
+
+        // Sync before making changes
+        await this.syncBeforeAction();
 
         const todo = {
             id: Date.now().toString(),
@@ -956,7 +996,10 @@ class GitHubTodoApp {
         });
     }
 
-    toggleTodo(id) {
+    async toggleTodo(id) {
+        // Sync before making changes
+        await this.syncBeforeAction();
+
         const todo = this.todos.find(t => t.id === id);
         if (todo) {
             todo.completed = !todo.completed;
@@ -969,7 +1012,10 @@ class GitHubTodoApp {
         }
     }
 
-    deleteTodo(id) {
+    async deleteTodo(id) {
+        // Sync before making changes
+        await this.syncBeforeAction();
+
         const todo = this.todos.find(t => t.id === id);
         const text = todo ? todo.text : 'item';
         this.todos = this.todos.filter(t => t.id !== id);
@@ -981,7 +1027,10 @@ class GitHubTodoApp {
         });
     }
 
-    clearCompleted() {
+    async clearCompleted() {
+        // Sync before making changes
+        await this.syncBeforeAction();
+
         const count = this.todos.filter(t => t.completed).length;
         if (count === 0) return;
 
