@@ -888,11 +888,12 @@ class GitHubTodoApp {
 
     async githubFetch(url, options = {}) {
         const isGetRequest = !options.method || options.method === 'GET';
+        // Only apply cache-busting to contents API (sync-related endpoints)
+        const isContentsApi = url.includes('/contents/');
 
-        // For GET requests, add cache-busting query param to avoid stale CDN responses
-        // Note: Cannot use Cache-Control headers due to GitHub CORS restrictions
         let finalUrl = url;
-        if (isGetRequest) {
+        if (isGetRequest && isContentsApi) {
+            // Add cache-busting query param to avoid stale CDN responses
             const cacheBuster = `_cb=${Date.now()}`;
             finalUrl = url.includes('?') ? `${url}&${cacheBuster}` : `${url}?${cacheBuster}`;
             syncTracker.info('Cache-busting GET request', { cacheBuster });
