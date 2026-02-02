@@ -530,6 +530,7 @@ class GitHubTodoApp {
     async saveTodos(retryCount = 0) {
         const maxRetries = 3;
         this.setSyncStatus('Checking remote state...', 'saving');
+        console.log(`saveTodos called (attempt ${retryCount + 1}), local SHA: ${this.fileSha ? this.fileSha.substring(0, 8) : 'null'}`);
 
         try {
             // First, fetch current remote state to check for conflicts
@@ -540,8 +541,10 @@ class GitHubTodoApp {
             // Check for todos conflict and merge if needed
             if (remoteTodosResponse.ok) {
                 const remoteData = await remoteTodosResponse.json();
+                console.log(`Remote todos SHA: ${remoteData.sha.substring(0, 8)}, local: ${this.fileSha ? this.fileSha.substring(0, 8) : 'null'}`);
                 if (remoteData.sha !== this.fileSha) {
                     // Remote has changed - merge todos
+                    console.log('Todos conflict detected, merging...');
                     const encryptedContent = atob(remoteData.content);
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     const remoteTodos = JSON.parse(decrypted);
@@ -549,6 +552,7 @@ class GitHubTodoApp {
                     this.fileSha = remoteData.sha;
                 }
             } else if (remoteTodosResponse.status === 404) {
+                console.log('No remote todos file found');
                 this.fileSha = null;
             }
 
@@ -573,9 +577,11 @@ class GitHubTodoApp {
 
             if (!todosResponse.ok) {
                 const error = await todosResponse.json();
+                console.error('Save todos failed:', error);
                 // Check if this is a SHA mismatch (409 conflict)
                 if (todosResponse.status === 409 || (error.message && error.message.includes('does not match'))) {
                     if (retryCount < maxRetries) {
+                        console.log(`SHA mismatch, retrying (${retryCount + 1}/${maxRetries})...`);
                         this.fileSha = null;
                         return await this.saveTodos(retryCount + 1);
                     }
@@ -585,6 +591,7 @@ class GitHubTodoApp {
 
             const todosData = await todosResponse.json();
             this.fileSha = todosData.content.sha;
+            console.log('Todos saved successfully, new SHA:', this.fileSha.substring(0, 8));
 
             this.renderTodos();
             this.setSyncStatus('Saved', 'saved');
@@ -805,25 +812,59 @@ class GitHubTodoApp {
         }
 
         try {
-            const response = await this.githubFetch(
-                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
-            );
+            // Fetch both todos and notes in parallel
+            const [todosResponse, notesResponse] = await Promise.all([
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`)
+            ]);
 
             let todosChanged = false;
+            let notesChanged = false;
 
-            if (response.ok) {
-                const data = await response.json();
+            // Sync todos
+            if (todosResponse.ok) {
+                const data = await todosResponse.json();
                 if (this.fileSha !== data.sha) {
                     todosChanged = true;
                     this.fileSha = data.sha;
                     const encryptedContent = atob(data.content);
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     this.todos = JSON.parse(decrypted);
+                    console.log('Todos updated from remote, new SHA:', data.sha.substring(0, 8));
                 }
+            } else if (todosResponse.status === 404) {
+                // No remote file, keep local
+                console.log('No remote todos file');
+            }
+
+            // Sync notes
+            if (notesResponse.ok) {
+                const data = await notesResponse.json();
+                if (this.notesFileSha !== data.sha) {
+                    notesChanged = true;
+                    this.notesFileSha = data.sha;
+                    const encryptedContent = atob(data.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    this.notes = JSON.parse(decrypted);
+                    console.log('Notes updated from remote, new SHA:', data.sha.substring(0, 8));
+                }
+            } else if (notesResponse.status === 404) {
+                // No remote file, keep local
+                console.log('No remote notes file');
             }
 
             this.renderTodos();
-            this.setSyncStatus(todosChanged ? 'Synced - updated' : 'Synced', 'saved');
+            this.renderNotes();
+
+            const changes = [];
+            if (todosChanged) changes.push('todos');
+            if (notesChanged) changes.push('notes');
+
+            if (changes.length > 0) {
+                this.setSyncStatus(`Synced - ${changes.join(' & ')} updated`, 'saved');
+            } else {
+                this.setSyncStatus('Synced - no changes', 'saved');
+            }
 
         } catch (error) {
             console.error('Sync error:', error);
@@ -882,16 +923,39 @@ class GitHubTodoApp {
         }
     }
 
-    async saveNotes() {
-        this.setSyncStatus('Encrypting & saving notes...', 'saving');
+    async saveNotes(retryCount = 0) {
+        const maxRetries = 3;
+        this.setSyncStatus('Saving notes...', 'saving');
+
         try {
+            // First, fetch current remote state to check for conflicts
+            const remoteResponse = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`
+            );
+
+            // Check for conflict and merge if needed
+            if (remoteResponse.ok) {
+                const remoteData = await remoteResponse.json();
+                if (remoteData.sha !== this.notesFileSha) {
+                    // Remote has changed - merge notes
+                    console.log('Notes conflict detected, merging...');
+                    const encryptedContent = atob(remoteData.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    const remoteNotes = JSON.parse(decrypted);
+                    this.notes = this.mergeNotes(remoteNotes, this.notes);
+                    this.notesFileSha = remoteData.sha;
+                }
+            } else if (remoteResponse.status === 404) {
+                this.notesFileSha = null;
+            }
+
+            // Encrypt and save
             const plaintext = JSON.stringify(this.notes, null, 2);
             const encrypted = await Crypto.encrypt(plaintext, this.encryptionPassword);
 
-            const content = btoa(encrypted);
             const body = {
                 message: 'Update encrypted notes',
-                content: content
+                content: btoa(encrypted)
             };
 
             if (this.notesFileSha) {
@@ -900,24 +964,62 @@ class GitHubTodoApp {
 
             const response = await this.githubFetch(
                 `https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`,
-                {
-                    method: 'PUT',
-                    body: JSON.stringify(body)
-                }
+                { method: 'PUT', body: JSON.stringify(body) }
             );
 
             if (!response.ok) {
                 const error = await response.json();
+                // Check if this is a SHA mismatch (409 conflict)
+                if (response.status === 409 || (error.message && error.message.includes('does not match'))) {
+                    if (retryCount < maxRetries) {
+                        console.log(`Notes SHA mismatch, retrying (${retryCount + 1}/${maxRetries})...`);
+                        this.notesFileSha = null;
+                        return await this.saveNotes(retryCount + 1);
+                    }
+                }
                 throw new Error(error.message || 'Failed to save notes');
             }
 
             const data = await response.json();
             this.notesFileSha = data.content.sha;
-            this.setSyncStatus('Encrypted & saved to GitHub', 'saved');
+            console.log('Notes saved, new SHA:', this.notesFileSha.substring(0, 8));
+            this.renderNotes();
+            this.setSyncStatus('Saved', 'saved');
         } catch (error) {
             console.error('Save notes error:', error);
-            this.setSyncStatus('Failed to save: ' + error.message, 'error');
+            this.setSyncStatus('Failed to save notes: ' + error.message, 'error');
         }
+    }
+
+    mergeNotes(remoteNotes, localNotes) {
+        // Create a map of all notes by ID
+        const noteMap = new Map();
+
+        // Add remote notes first
+        for (const note of remoteNotes) {
+            noteMap.set(note.id, note);
+        }
+
+        // Merge local notes - local changes take precedence for same ID
+        // But use updatedAt to determine which version is newer
+        for (const note of localNotes) {
+            const existing = noteMap.get(note.id);
+            if (existing) {
+                // Keep the newer version
+                if (new Date(note.updatedAt) > new Date(existing.updatedAt)) {
+                    noteMap.set(note.id, note);
+                }
+            } else {
+                noteMap.set(note.id, note);
+            }
+        }
+
+        // Convert back to array and sort by updatedAt (newest first)
+        const merged = Array.from(noteMap.values());
+        merged.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+        console.log(`Notes merged: ${remoteNotes.length} remote + ${localNotes.length} local = ${merged.length} total`);
+        return merged;
     }
 
     addNote() {
