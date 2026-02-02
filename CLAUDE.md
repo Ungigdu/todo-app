@@ -124,7 +124,7 @@ gh auth switch -u Ungigdu
 Set commit author (optional):
 ```bash
 git config user.name "ungigdu"
-git config user.email "nicholasyeeaungigdu@gmail.com"
+git config user.email "ungigdu@proton.me"
 ```
 
 ---
