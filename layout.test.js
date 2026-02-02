@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 test.describe('Layout Tests', () => {
     test.beforeEach(async ({ page }) => {
         // Load the page
-        await page.goto(`file://${__dirname}/index.html`);
+        await page.goto('/index.html');
 
         // Show todo screen, hide login screen (simulate logged in state)
         await page.evaluate(() => {
