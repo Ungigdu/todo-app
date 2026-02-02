@@ -1761,7 +1761,22 @@ class GitHubTodoApp {
                     const fileData = await this.loadFileData(id);
                     const blob = this.base64ToBlob(fileData, 'application/pdf');
                     const blobUrl = URL.createObjectURL(blob);
-                    this.filePreviewBody.innerHTML = `<iframe src="${blobUrl}" class="pdf-viewer"></iframe>`;
+
+                    // Check if mobile (Android/iOS) - they don't support inline PDF viewing
+                    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+                    if (isMobile) {
+                        // On mobile, show open button instead of iframe
+                        this.filePreviewBody.innerHTML = `
+                            <div class="pdf-mobile-fallback">
+                                <div class="pdf-icon">📄</div>
+                                <p>${this.escapeHtml(file.name)}</p>
+                                <a href="${blobUrl}" target="_blank" class="btn primary">Open PDF</a>
+                            </div>
+                        `;
+                    } else {
+                        this.filePreviewBody.innerHTML = `<iframe src="${blobUrl}" class="pdf-viewer"></iframe>`;
+                    }
                     // Store URL for cleanup
                     this.filePreviewBody.dataset.blobUrl = blobUrl;
                 } catch (error) {

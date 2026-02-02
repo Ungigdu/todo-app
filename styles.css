@@ -1257,6 +1257,32 @@ header {
     display: none;
 }
 
+/* PDF mobile fallback */
+.pdf-mobile-fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 40px;
+    text-align: center;
+}
+
+.pdf-mobile-fallback .pdf-icon {
+    font-size: 64px;
+}
+
+.pdf-mobile-fallback p {
+    color: var(--text-primary);
+    font-size: var(--font-size-big);
+    font-weight: 500;
+    word-break: break-all;
+}
+
+.pdf-mobile-fallback .btn {
+    margin-top: 10px;
+}
+
 .file-preview-info {
     display: flex;
     gap: 15px;
