@@ -331,9 +331,13 @@ class GitHubTodoApp {
             }
         });
         this.addBtn.addEventListener('click', () => this.addTodo());
-        this.newTodoInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.addTodo();
+        this.newTodoInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.addTodo();
+            }
         });
+        this.newTodoInput.addEventListener('input', () => this.autoExpandTextarea(this.newTodoInput));
         this.clearCompletedBtn.addEventListener('click', () => this.clearCompleted());
         this.filterBtns.forEach(btn => {
             btn.addEventListener('click', (e) => this.setFilter(e.target.dataset.filter));
@@ -368,9 +372,13 @@ class GitHubTodoApp {
             this.addNoteBtn.addEventListener('click', () => this.addNote());
         }
         if (this.newNoteTitleInput) {
-            this.newNoteTitleInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') this.addNote();
+            this.newNoteTitleInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.addNote();
+                }
             });
+            this.newNoteTitleInput.addEventListener('input', () => this.autoExpandTextarea(this.newNoteTitleInput));
         }
 
         // Modal events
@@ -1075,6 +1083,7 @@ class GitHubTodoApp {
 
         this.todos.unshift(todo);
         this.newTodoInput.value = '';
+        this.newTodoInput.style.height = 'auto'; // Reset height after clearing
         this.renderTodos();
         this.scheduleSave({
             type: 'add',
@@ -1178,6 +1187,14 @@ class GitHubTodoApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    autoExpandTextarea(textarea) {
+        if (!textarea) return;
+        // Reset height to auto to get correct scrollHeight
+        textarea.style.height = 'auto';
+        // Set height to scrollHeight (content height)
+        textarea.style.height = textarea.scrollHeight + 'px';
     }
 
     // Sync Methods
@@ -1467,6 +1484,7 @@ class GitHubTodoApp {
 
         this.notes.unshift(note);
         this.newNoteTitleInput.value = '';
+        this.newNoteTitleInput.style.height = 'auto'; // Reset height after clearing
         this.renderNotes();
         this.scheduleNotesSave();
 

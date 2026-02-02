@@ -115,7 +115,7 @@ body {
 }
 
 .sidebar {
-    width: 70px;
+    width: 80px;
     background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
     display: flex;
     flex-direction: column;
@@ -222,10 +222,10 @@ body {
     background: transparent;
     border: none;
     color: rgba(255,255,255,0.7);
-    padding: 12px 5px;
+    padding: 15px 8px;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 14px;
     transition: all 0.2s;
 }
 
@@ -437,15 +437,20 @@ header {
     margin-bottom: 10px;
 }
 
-.add-todo input {
+.add-todo textarea {
     flex: 1;
-    padding: 10px;
+    padding: 8px 10px;
     border: 2px solid #e1e1e1;
     border-radius: 8px;
     font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.4;
+    field-sizing: content;
 }
 
-.add-todo input:focus {
+.add-todo textarea:focus {
     outline: none;
     border-color: #667eea;
 }
@@ -980,15 +985,20 @@ header {
     gap: 10px;
 }
 
-.add-note input {
+.add-note textarea {
     flex: 1;
-    padding: 10px;
+    padding: 8px 10px;
     border: 2px solid #e1e1e1;
     border-radius: 8px;
     font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.4;
+    field-sizing: content;
 }
 
-.add-note input:focus {
+.add-note textarea:focus {
     outline: none;
     border-color: #667eea;
 }
@@ -1163,7 +1173,7 @@ header {
 /* Responsive - smaller screens */
 @media (max-width: 480px) {
     .sidebar {
-        width: 55px;
+        width: 60px;
         padding: 6px;
     }
 
@@ -1186,8 +1196,8 @@ header {
     }
 
     .sidebar-nav .tab-btn {
-        padding: 10px 3px;
-        font-size: 10px;
+        padding: 12px 5px;
+        font-size: 12px;
     }
 
     .add-todo,
