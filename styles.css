@@ -528,10 +528,21 @@ header {
     accent-color: #667eea;
 }
 
-.todo-text {
+.todo-content {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.todo-text {
     font-size: var(--font-size-big);
     color: #333;
+}
+
+.todo-timestamp {
+    font-size: var(--font-size-small);
+    color: #999;
 }
 
 .todo-delete {

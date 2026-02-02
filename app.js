@@ -774,7 +774,10 @@ class GitHubTodoApp {
             this.todoList.innerHTML = filtered.map(todo => `
                 <li class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
                     <input type="checkbox" class="todo-checkbox" ${todo.completed ? 'checked' : ''}>
-                    <span class="todo-text">${this.escapeHtml(todo.text)}</span>
+                    <div class="todo-content">
+                        <span class="todo-text">${this.escapeHtml(todo.text)}</span>
+                        <span class="todo-timestamp">${this.formatDateTime(todo.createdAt)}</span>
+                    </div>
                     <button class="todo-delete">&times;</button>
                 </li>
             `).join('');
@@ -1180,7 +1183,7 @@ class GitHubTodoApp {
                         <div class="note-title">${this.escapeHtml(note.title)}</div>
                         <div class="note-preview">${this.escapeHtml(note.content.substring(0, 50)) || 'No content'}</div>
                     </div>
-                    <span class="note-date">${this.formatDate(note.updatedAt)}</span>
+                    <span class="note-date">${this.formatDateTime(note.createdAt)}</span>
                 </li>
             `).join('');
 
@@ -1205,6 +1208,27 @@ class GitHubTodoApp {
         if (days === 1) return 'Yesterday';
         if (days < 7) return `${days} days ago`;
         return date.toLocaleDateString();
+    }
+
+    formatDateTime(isoString) {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (days === 0) {
+            return `Today ${timeStr}`;
+        } else if (days === 1) {
+            return `Yesterday ${timeStr}`;
+        } else if (days < 7) {
+            return `${days}d ago ${timeStr}`;
+        } else {
+            const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            return `${dateStr} ${timeStr}`;
+        }
     }
 
     // Reset Password Methods
