@@ -194,6 +194,15 @@ class GitHubTodoApp {
         this.currentTab = 'todos';
         this.editingNoteId = null;
 
+        // Debounced save
+        this.saveDebounceTimer = null;
+        this.saveDebounceDelay = 2000; // 2 seconds
+        this.pendingSave = false;
+
+        // Debounced notes save
+        this.notesSaveDebounceTimer = null;
+        this.pendingNotesSave = false;
+
         this.initElements();
         this.bindEvents();
         this.init();
@@ -252,6 +261,8 @@ class GitHubTodoApp {
         // Todo elements
         this.userAvatar = document.getElementById('user-avatar');
         this.userName = document.getElementById('user-name');
+        this.popupUserName = document.getElementById('popup-user-name');
+        this.avatarPopup = document.getElementById('avatar-popup');
         this.logoutBtn = document.getElementById('logout-btn');
         this.newTodoInput = document.getElementById('new-todo');
         this.addBtn = document.getElementById('add-btn');
@@ -303,6 +314,21 @@ class GitHubTodoApp {
             this.showSettingsInput();
         });
         this.logoutBtn.addEventListener('click', () => this.logout());
+
+        // Avatar popup events
+        if (this.userAvatar) {
+            this.userAvatar.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleAvatarPopup();
+            });
+        }
+
+        // Close popup when clicking outside
+        document.addEventListener('click', (e) => {
+            if (this.avatarPopup && !this.avatarPopup.contains(e.target) && e.target !== this.userAvatar) {
+                this.avatarPopup.classList.add('hidden');
+            }
+        });
         this.addBtn.addEventListener('click', () => this.addTodo());
         this.newTodoInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addTodo();
@@ -373,6 +399,12 @@ class GitHubTodoApp {
                 const isHidden = this.syncTrackerPanel.classList.contains('hidden');
                 this.toggleTrackerBtn.textContent = isHidden ? 'Show Sync Tracker' : 'Hide Sync Tracker';
             }
+        }
+    }
+
+    toggleAvatarPopup() {
+        if (this.avatarPopup) {
+            this.avatarPopup.classList.toggle('hidden');
         }
     }
 
@@ -507,6 +539,9 @@ class GitHubTodoApp {
         if (this.user) {
             this.userAvatar.src = this.user.avatar_url;
             this.userName.textContent = this.user.login;
+            if (this.popupUserName) {
+                this.popupUserName.textContent = this.user.login;
+            }
         }
 
         // Display device ID
@@ -671,6 +706,7 @@ class GitHubTodoApp {
 
         try {
             // Record the action if provided (only on first attempt)
+            // Note: When using scheduleSave, action is null since it's already recorded
             if (action && retryCount === 0) {
                 this.recordAction(action);
                 syncTracker.info('Recorded action', { type: action.type, description: action.description });
@@ -965,6 +1001,62 @@ class GitHubTodoApp {
         this.syncStatus.className = 'sync-status ' + className;
     }
 
+    scheduleSave(action = null) {
+        // Record action immediately
+        if (action) {
+            this.recordAction(action);
+        }
+
+        // Mark pending save
+        this.pendingSave = true;
+        this.setSyncStatus('Changes pending...', 'pending');
+
+        // Clear existing timer
+        if (this.saveDebounceTimer) {
+            clearTimeout(this.saveDebounceTimer);
+        }
+
+        // Set new timer
+        this.saveDebounceTimer = setTimeout(() => {
+            this.executeSave();
+        }, this.saveDebounceDelay);
+    }
+
+    async executeSave() {
+        if (!this.pendingSave) return;
+
+        this.pendingSave = false;
+        this.saveDebounceTimer = null;
+
+        // Call saveTodos without action (actions already recorded)
+        await this.saveTodos(null);
+    }
+
+    scheduleNotesSave() {
+        // Mark pending save
+        this.pendingNotesSave = true;
+        this.setSyncStatus('Changes pending...', 'pending');
+
+        // Clear existing timer
+        if (this.notesSaveDebounceTimer) {
+            clearTimeout(this.notesSaveDebounceTimer);
+        }
+
+        // Set new timer
+        this.notesSaveDebounceTimer = setTimeout(() => {
+            this.executeNotesSave();
+        }, this.saveDebounceDelay);
+    }
+
+    async executeNotesSave() {
+        if (!this.pendingNotesSave) return;
+
+        this.pendingNotesSave = false;
+        this.notesSaveDebounceTimer = null;
+
+        await this.saveNotes();
+    }
+
     addTodo() {
         const text = this.newTodoInput.value.trim();
         if (!text) return;
@@ -979,7 +1071,7 @@ class GitHubTodoApp {
         this.todos.unshift(todo);
         this.newTodoInput.value = '';
         this.renderTodos();
-        this.saveTodos({
+        this.scheduleSave({
             type: 'add',
             description: `Added "${this.truncateText(text, 30)}"`,
             todoId: todo.id
@@ -991,7 +1083,7 @@ class GitHubTodoApp {
         if (todo) {
             todo.completed = !todo.completed;
             this.renderTodos();
-            this.saveTodos({
+            this.scheduleSave({
                 type: 'toggle',
                 description: `${todo.completed ? 'Completed' : 'Uncompleted'} "${this.truncateText(todo.text, 30)}"`,
                 todoId: id
@@ -1004,7 +1096,7 @@ class GitHubTodoApp {
         const text = todo ? todo.text : 'item';
         this.todos = this.todos.filter(t => t.id !== id);
         this.renderTodos();
-        this.saveTodos({
+        this.scheduleSave({
             type: 'delete',
             description: `Deleted "${this.truncateText(text, 30)}"`,
             todoId: id
@@ -1017,7 +1109,7 @@ class GitHubTodoApp {
 
         this.todos = this.todos.filter(t => !t.completed);
         this.renderTodos();
-        this.saveTodos({
+        this.scheduleSave({
             type: 'clear',
             description: `Cleared ${count} completed item${count !== 1 ? 's' : ''}`
         });
@@ -1371,7 +1463,7 @@ class GitHubTodoApp {
         this.notes.unshift(note);
         this.newNoteTitleInput.value = '';
         this.renderNotes();
-        this.saveNotes();
+        this.scheduleNotesSave();
 
         // Open the new note in modal
         this.openNoteModal(note.id);
@@ -1404,7 +1496,7 @@ class GitHubTodoApp {
         note.updatedAt = new Date().toISOString();
 
         this.renderNotes();
-        this.saveNotes();
+        this.scheduleNotesSave();
         this.closeNoteModal();
     }
 
@@ -1430,7 +1522,7 @@ class GitHubTodoApp {
 
         this.notes = this.notes.filter(n => n.id !== this.editingNoteId);
         this.renderNotes();
-        this.saveNotes();
+        this.scheduleNotesSave();
         this.closeNoteModal();
     }
 
