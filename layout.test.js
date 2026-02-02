@@ -169,4 +169,27 @@ test.describe('Layout Tests', () => {
         const modal = page.locator('#reset-password-modal');
         await expect(modal).toBeHidden();
     });
+
+    test('sidebar tab buttons should fit within sidebar width with margin for glow', async ({ page }) => {
+        const sidebar = await page.locator('.sidebar').boundingBox();
+        const tabButtons = await page.locator('.sidebar-nav .tab-btn').all();
+        const sidebarPadding = 10; // sidebar has padding: 10px
+        const glowMargin = 5; // need margin for box-shadow glow effect
+
+        // Calculate the usable content area (sidebar width minus padding and border)
+        const contentRight = sidebar.x + sidebar.width - sidebarPadding;
+        console.log(`Sidebar: x=${sidebar.x}, width=${sidebar.width}, contentRight=${contentRight}`);
+
+        for (const btn of tabButtons) {
+            const btnBox = await btn.boundingBox();
+            const btnText = await btn.textContent();
+            const btnRight = btnBox.x + btnBox.width;
+            console.log(`Button "${btnText}": x=${btnBox.x}, width=${btnBox.width}, right=${btnRight}`);
+
+            // Button should start within sidebar (after padding)
+            expect(btnBox.x).toBeGreaterThanOrEqual(sidebar.x + sidebarPadding);
+            // Button right edge should have margin for glow effect before sidebar border
+            expect(btnRight + glowMargin).toBeLessThanOrEqual(contentRight);
+        }
+    });
 });
