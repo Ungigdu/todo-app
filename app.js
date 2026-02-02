@@ -623,7 +623,7 @@ class GitHubTodoApp {
     }
 
     async githubFetch(url, options = {}) {
-        // Add cache-busting for GET requests to ensure fresh data
+        // Add cache-busting timestamp for GET requests to ensure fresh data
         let fetchUrl = url;
         if (!options.method || options.method === 'GET') {
             const separator = url.includes('?') ? '&' : '?';
@@ -636,7 +636,6 @@ class GitHubTodoApp {
                 'Authorization': `token ${this.token}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache',
                 ...options.headers
             }
         });
