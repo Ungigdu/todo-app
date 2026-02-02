@@ -63,6 +63,26 @@ test.describe('Layout Tests', () => {
         expect(sidebar.height).toBeCloseTo(viewport.height, 0);
     });
 
+    test('note modal should fill viewport on mobile', async ({ page }) => {
+        // Set mobile viewport
+        await page.setViewportSize({ width: 375, height: 667 });
+
+        // Show the modal
+        await page.evaluate(() => {
+            document.getElementById('note-modal').classList.remove('hidden');
+        });
+
+        const viewport = page.viewportSize();
+        const modal = await page.locator('#note-modal').boundingBox();
+
+        console.log(`Mobile viewport: ${viewport.width}x${viewport.height}`);
+        console.log(`Modal: ${modal.width}x${modal.height}`);
+
+        // Modal should fill the viewport
+        expect(modal.width).toBeCloseTo(viewport.width, 0);
+        expect(modal.height).toBeCloseTo(viewport.height, 0);
+    });
+
     test('avatar popup should stay within viewport bounds', async ({ page }) => {
         // Show the popup
         await page.evaluate(() => {

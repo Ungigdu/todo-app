@@ -1478,11 +1478,43 @@ class GitHubTodoApp {
         if (this.modalNoteContent) this.modalNoteContent.value = note.content;
         if (this.noteModal) this.noteModal.classList.remove('hidden');
         if (this.modalNoteContent) this.modalNoteContent.focus();
+
+        // Handle visual viewport changes (mobile keyboard)
+        this.setupVisualViewportHandler();
     }
 
     closeNoteModal() {
         if (this.noteModal) this.noteModal.classList.add('hidden');
         this.editingNoteId = null;
+        this.removeVisualViewportHandler();
+    }
+
+    setupVisualViewportHandler() {
+        if (window.visualViewport && !this.viewportHandler) {
+            this.viewportHandler = () => {
+                if (this.noteModal && !this.noteModal.classList.contains('hidden')) {
+                    const viewport = window.visualViewport;
+                    this.noteModal.style.height = `${viewport.height}px`;
+                    this.noteModal.style.top = `${viewport.offsetTop}px`;
+                }
+            };
+            window.visualViewport.addEventListener('resize', this.viewportHandler);
+            window.visualViewport.addEventListener('scroll', this.viewportHandler);
+            this.viewportHandler(); // Initial call
+        }
+    }
+
+    removeVisualViewportHandler() {
+        if (window.visualViewport && this.viewportHandler) {
+            window.visualViewport.removeEventListener('resize', this.viewportHandler);
+            window.visualViewport.removeEventListener('scroll', this.viewportHandler);
+            this.viewportHandler = null;
+            // Reset modal styles
+            if (this.noteModal) {
+                this.noteModal.style.height = '';
+                this.noteModal.style.top = '';
+            }
+        }
     }
 
     saveNoteFromModal() {
