@@ -44,14 +44,35 @@ class Crypto {
         combined.set(iv, salt.length);
         combined.set(new Uint8Array(encrypted), salt.length + iv.length);
 
-        // Return as base64
-        return btoa(String.fromCharCode(...combined));
+        // Return as base64 (chunked to avoid stack overflow on large files)
+        return this.uint8ArrayToBase64(combined);
+    }
+
+    static uint8ArrayToBase64(uint8Array) {
+        // Process in chunks to avoid stack overflow
+        const chunkSize = 0x8000; // 32KB chunks
+        let result = '';
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, i + chunkSize);
+            result += String.fromCharCode.apply(null, chunk);
+        }
+        return btoa(result);
+    }
+
+    static base64ToUint8Array(base64) {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
     }
 
     static async decrypt(ciphertext, password) {
         try {
             const decoder = new TextDecoder();
-            const combined = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
+            const combined = this.base64ToUint8Array(ciphertext);
 
             const salt = combined.slice(0, 16);
             const iv = combined.slice(16, 28);
@@ -92,6 +113,15 @@ class GitHubTodoApp {
         this.notesDataFile = 'notes.encrypted';
         this.currentTab = 'todos';
         this.editingNoteId = null;
+
+        // Files - separate storage architecture
+        this.files = []; // Index only (metadata + thumbnails, no file data)
+        this.filesIndexSha = null;
+        this.filesIndexFile = 'files-index.encrypted';
+        this.filesDir = 'files'; // Directory for individual file blobs
+        this.maxFileSize = 75 * 1024 * 1024; // 75 MB per file (100MB GitHub limit minus base64 overhead)
+        this.previewingFileId = null;
+        this.fileDataCache = new Map(); // Cache loaded file data
 
         // Debounced save
         this.saveDebounceTimer = null;
@@ -168,6 +198,24 @@ class GitHubTodoApp {
         this.copyNoteBtn = document.getElementById('copy-note-btn');
         this.saveNoteBtn = document.getElementById('save-note-btn');
         this.deleteNoteBtn = document.getElementById('delete-note-btn');
+
+        // Files elements
+        this.filesSection = document.getElementById('files-section');
+        this.fileInput = document.getElementById('file-input');
+        this.uploadFileBtn = document.getElementById('upload-file-btn');
+        this.filesList = document.getElementById('files-list');
+        this.filesCount = document.getElementById('files-count');
+        this.totalSize = document.getElementById('total-size');
+
+        // File preview modal elements
+        this.filePreviewModal = document.getElementById('file-preview-modal');
+        this.previewFileName = document.getElementById('preview-file-name');
+        this.filePreviewBody = document.getElementById('file-preview-body');
+        this.previewFileSize = document.getElementById('preview-file-size');
+        this.previewFileDate = document.getElementById('preview-file-date');
+        this.closeFilePreviewBtn = document.getElementById('close-file-preview');
+        this.downloadFileBtn = document.getElementById('download-file-btn');
+        this.deleteFileBtn = document.getElementById('delete-file-btn');
 
         // Reset password elements
         this.resetPasswordBtn = document.getElementById('reset-password-btn');
@@ -257,6 +305,28 @@ class GitHubTodoApp {
         if (this.noteModal) {
             this.noteModal.addEventListener('click', (e) => {
                 if (e.target === this.noteModal) this.closeNoteModal();
+            });
+        }
+
+        // File events
+        if (this.uploadFileBtn) {
+            this.uploadFileBtn.addEventListener('click', () => this.fileInput.click());
+        }
+        if (this.fileInput) {
+            this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+        }
+        if (this.closeFilePreviewBtn) {
+            this.closeFilePreviewBtn.addEventListener('click', () => this.closeFilePreview());
+        }
+        if (this.downloadFileBtn) {
+            this.downloadFileBtn.addEventListener('click', () => this.downloadFile());
+        }
+        if (this.deleteFileBtn) {
+            this.deleteFileBtn.addEventListener('click', () => this.deleteFile());
+        }
+        if (this.filePreviewModal) {
+            this.filePreviewModal.addEventListener('click', (e) => {
+                if (e.target === this.filePreviewModal) this.closeFilePreview();
             });
         }
 
@@ -454,6 +524,7 @@ class GitHubTodoApp {
 
             await this.loadTodos();
             await this.loadNotes();
+            await this.loadFiles();
             this.showTodoScreen();
         } catch (error) {
             this.showLoginError(error.message);
@@ -829,14 +900,16 @@ class GitHubTodoApp {
         }
 
         try {
-            // Fetch both todos and notes in parallel
-            const [todosResponse, notesResponse] = await Promise.all([
+            // Fetch todos, notes, and files index in parallel
+            const [todosResponse, notesResponse, filesResponse] = await Promise.all([
                 this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`)
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`),
+                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.filesIndexFile}`)
             ]);
 
             let todosChanged = false;
             let notesChanged = false;
+            let filesChanged = false;
 
             // Sync todos
             if (todosResponse.ok) {
@@ -878,12 +951,36 @@ class GitHubTodoApp {
                 console.log('Notes fetch failed:', notesResponse.status);
             }
 
+            // Sync files index
+            if (filesResponse.ok) {
+                const data = await filesResponse.json();
+                console.log('Remote files index SHA:', data.sha.substring(0, 8), '| Local:', this.filesIndexSha ? this.filesIndexSha.substring(0, 8) : 'null');
+                if (this.filesIndexSha !== data.sha) {
+                    filesChanged = true;
+                    this.filesIndexSha = data.sha;
+                    const encryptedContent = atob(data.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    this.files = JSON.parse(decrypted);
+                    // Clear the data cache since index changed
+                    this.fileDataCache.clear();
+                    console.log('✓ Files index updated from remote');
+                } else {
+                    console.log('Files index SHA match, no update needed');
+                }
+            } else if (filesResponse.status === 404) {
+                console.log('No remote files index (404)');
+            } else {
+                console.log('Files index fetch failed:', filesResponse.status);
+            }
+
             this.renderTodos();
             this.renderNotes();
+            this.renderFiles();
 
             const changes = [];
             if (todosChanged) changes.push('todos');
             if (notesChanged) changes.push('notes');
+            if (filesChanged) changes.push('files');
 
             if (changes.length > 0) {
                 console.log('=== Sync Complete: ' + changes.join(' & ') + ' updated ===');
@@ -917,6 +1014,7 @@ class GitHubTodoApp {
         });
         if (this.todosSection) this.todosSection.classList.toggle('hidden', tab !== 'todos');
         if (this.notesSection) this.notesSection.classList.toggle('hidden', tab !== 'notes');
+        if (this.filesSection) this.filesSection.classList.toggle('hidden', tab !== 'files');
     }
 
     // Notes methods
@@ -1198,6 +1296,584 @@ class GitHubTodoApp {
         }
     }
 
+    // Files methods - Separate storage architecture
+    // Index file contains metadata only, each file stored as separate blob
+
+    async loadFiles() {
+        try {
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.filesIndexFile}`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                this.filesIndexSha = data.sha;
+                const encryptedContent = atob(data.content);
+                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                this.files = JSON.parse(decrypted);
+            } else if (response.status === 404) {
+                this.files = [];
+                this.filesIndexSha = null;
+            } else {
+                throw new Error('Failed to load files index');
+            }
+
+            // Clear the data cache
+            this.fileDataCache.clear();
+            this.renderFiles();
+        } catch (error) {
+            console.error('Load files error:', error);
+            if (error.message.includes('Decryption failed')) {
+                throw error;
+            }
+            this.files = [];
+            this.renderFiles();
+        }
+    }
+
+    async saveFilesIndex(retryCount = 0) {
+        const maxRetries = 3;
+
+        try {
+            // Check for conflicts
+            const remoteResponse = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.filesIndexFile}`
+            );
+
+            if (remoteResponse.ok) {
+                const remoteData = await remoteResponse.json();
+                if (remoteData.sha !== this.filesIndexSha) {
+                    console.log('Files index conflict detected, merging...');
+                    const encryptedContent = atob(remoteData.content);
+                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                    const remoteFiles = JSON.parse(decrypted);
+                    this.files = this.mergeFiles(remoteFiles, this.files);
+                    this.filesIndexSha = remoteData.sha;
+                }
+            } else if (remoteResponse.status === 404) {
+                this.filesIndexSha = null;
+            }
+
+            // Save the index (metadata only, no file data)
+            const plaintext = JSON.stringify(this.files, null, 2);
+            const encrypted = await Crypto.encrypt(plaintext, this.encryptionPassword);
+
+            const body = {
+                message: 'Update files index',
+                content: btoa(encrypted)
+            };
+
+            if (this.filesIndexSha) {
+                body.sha = this.filesIndexSha;
+            }
+
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.filesIndexFile}`,
+                { method: 'PUT', body: JSON.stringify(body) }
+            );
+
+            if (!response.ok) {
+                const error = await response.json();
+                if (response.status === 409 || (error.message && error.message.includes('does not match'))) {
+                    if (retryCount < maxRetries) {
+                        console.log(`Files index SHA mismatch, retrying (${retryCount + 1}/${maxRetries})...`);
+                        this.filesIndexSha = null;
+                        return await this.saveFilesIndex(retryCount + 1);
+                    }
+                }
+                throw new Error(error.message || 'Failed to save files index');
+            }
+
+            const data = await response.json();
+            this.filesIndexSha = data.content.sha;
+            console.log('Files index saved, SHA:', this.filesIndexSha.substring(0, 8));
+        } catch (error) {
+            console.error('Save files index error:', error);
+            throw error;
+        }
+    }
+
+    // Save individual file data as a separate encrypted blob
+    async saveFileBlob(fileId, fileData) {
+        this.setSyncStatus('Uploading file...', 'saving');
+
+        try {
+            // Encrypt the file data
+            const encrypted = await Crypto.encrypt(fileData, this.encryptionPassword);
+            const base64Content = btoa(encrypted);
+            const filePath = `${this.filesDir}/${fileId}.encrypted`;
+
+            // Check if we need Git Blobs API for large files
+            if (base64Content.length > 1024 * 1024) {
+                console.log('Large file, using Git Blobs API...');
+                await this.saveFileBlobViaGitApi(filePath, encrypted);
+            } else {
+                // Use Contents API for smaller files
+                const body = {
+                    message: `Add encrypted file ${fileId}`,
+                    content: base64Content
+                };
+
+                const response = await this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${filePath}`,
+                    { method: 'PUT', body: JSON.stringify(body) }
+                );
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to save file');
+                }
+            }
+
+            console.log('File blob saved:', fileId);
+        } catch (error) {
+            console.error('Save file blob error:', error);
+            throw error;
+        }
+    }
+
+    // Save large file using Git Data API
+    async saveFileBlobViaGitApi(filePath, encryptedContent) {
+        const base64Content = btoa(encryptedContent);
+
+        // Step 1: Create a blob
+        const blobResponse = await this.githubFetch(
+            `https://api.github.com/repos/${this.repo}/git/blobs`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    content: base64Content,
+                    encoding: 'base64'
+                })
+            }
+        );
+
+        if (!blobResponse.ok) {
+            const error = await blobResponse.json();
+            throw new Error('Failed to create blob: ' + (error.message || 'Unknown error'));
+        }
+
+        const blobData = await blobResponse.json();
+        const blobSha = blobData.sha;
+
+        // Step 2: Get current commit
+        const refResponse = await this.githubFetch(
+            `https://api.github.com/repos/${this.repo}/git/ref/heads/main`
+        );
+
+        let currentCommitSha, branchName = 'main';
+        if (refResponse.ok) {
+            const refData = await refResponse.json();
+            currentCommitSha = refData.object.sha;
+        } else {
+            const masterRefResponse = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/git/ref/heads/master`
+            );
+            if (masterRefResponse.ok) {
+                const refData = await masterRefResponse.json();
+                currentCommitSha = refData.object.sha;
+                branchName = 'master';
+            } else {
+                throw new Error('Could not find main or master branch');
+            }
+        }
+
+        // Step 3: Get current tree
+        const commitResponse = await this.githubFetch(
+            `https://api.github.com/repos/${this.repo}/git/commits/${currentCommitSha}`
+        );
+        const commitData = await commitResponse.json();
+        const baseTreeSha = commitData.tree.sha;
+
+        // Step 4: Create new tree
+        const treeResponse = await this.githubFetch(
+            `https://api.github.com/repos/${this.repo}/git/trees`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    base_tree: baseTreeSha,
+                    tree: [{
+                        path: filePath,
+                        mode: '100644',
+                        type: 'blob',
+                        sha: blobSha
+                    }]
+                })
+            }
+        );
+        const treeData = await treeResponse.json();
+
+        // Step 5: Create commit
+        const newCommitResponse = await this.githubFetch(
+            `https://api.github.com/repos/${this.repo}/git/commits`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    message: `Add encrypted file`,
+                    tree: treeData.sha,
+                    parents: [currentCommitSha]
+                })
+            }
+        );
+        const newCommitData = await newCommitResponse.json();
+
+        // Step 6: Update ref
+        await this.githubFetch(
+            `https://api.github.com/repos/${this.repo}/git/refs/heads/${branchName}`,
+            {
+                method: 'PATCH',
+                body: JSON.stringify({ sha: newCommitData.sha })
+            }
+        );
+    }
+
+    // Load file data on demand
+    async loadFileData(fileId) {
+        // Check cache first
+        if (this.fileDataCache.has(fileId)) {
+            return this.fileDataCache.get(fileId);
+        }
+
+        const filePath = `${this.filesDir}/${fileId}.encrypted`;
+
+        try {
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${filePath}`
+            );
+
+            if (!response.ok) {
+                throw new Error('File not found');
+            }
+
+            const data = await response.json();
+            let encryptedContent;
+
+            if (data.content) {
+                encryptedContent = atob(data.content);
+            } else if (data.sha) {
+                // Large file - fetch via Blobs API
+                const blobResponse = await this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/git/blobs/${data.sha}`
+                );
+                if (blobResponse.ok) {
+                    const blobData = await blobResponse.json();
+                    encryptedContent = atob(blobData.content);
+                }
+            }
+
+            if (encryptedContent) {
+                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                // Cache it
+                this.fileDataCache.set(fileId, decrypted);
+                return decrypted;
+            }
+
+            throw new Error('Could not load file data');
+        } catch (error) {
+            console.error('Load file data error:', error);
+            throw error;
+        }
+    }
+
+    // Delete file blob from repo
+    async deleteFileBlob(fileId) {
+        const filePath = `${this.filesDir}/${fileId}.encrypted`;
+
+        try {
+            // Get current file SHA
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${filePath}`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+
+                const deleteResponse = await this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${filePath}`,
+                    {
+                        method: 'DELETE',
+                        body: JSON.stringify({
+                            message: `Delete encrypted file ${fileId}`,
+                            sha: data.sha
+                        })
+                    }
+                );
+
+                if (!deleteResponse.ok) {
+                    console.warn('Failed to delete file blob:', fileId);
+                }
+            }
+
+            // Remove from cache
+            this.fileDataCache.delete(fileId);
+        } catch (error) {
+            console.warn('Delete file blob error:', error);
+        }
+    }
+
+    mergeFiles(remoteFiles, localFiles) {
+        const fileMap = new Map();
+
+        for (const file of remoteFiles) {
+            fileMap.set(file.id, file);
+        }
+
+        for (const file of localFiles) {
+            fileMap.set(file.id, file);
+        }
+
+        const merged = Array.from(fileMap.values());
+        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        return merged;
+    }
+
+    async handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Reset input
+        this.fileInput.value = '';
+
+        // Check file size
+        if (file.size > this.maxFileSize) {
+            alert(`File too large. Maximum size per file is ${this.formatFileSize(this.maxFileSize)}`);
+            return;
+        }
+
+        this.setSyncStatus('Uploading file...', 'saving');
+
+        try {
+            // Read file as base64
+            const base64Data = await this.readFileAsBase64(file);
+
+            // Create thumbnail for images
+            let thumbnail = null;
+            if (file.type.startsWith('image/')) {
+                thumbnail = await this.createThumbnail(base64Data, file.type);
+            }
+
+            const fileId = Date.now().toString();
+
+            // Create file record (metadata only, no data)
+            const fileRecord = {
+                id: fileId,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                createdAt: new Date().toISOString(),
+                thumbnail: thumbnail
+                // Note: 'data' is NOT stored in index, it's stored separately
+            };
+
+            // Save the file blob first
+            await this.saveFileBlob(fileId, base64Data);
+
+            // Cache the data locally
+            this.fileDataCache.set(fileId, base64Data);
+
+            // Add to index and save
+            this.files.unshift(fileRecord);
+            this.renderFiles();
+            await this.saveFilesIndex();
+
+            this.setSyncStatus('Saved', 'saved');
+        } catch (error) {
+            console.error('Upload error:', error);
+            this.setSyncStatus('Upload failed: ' + error.message, 'error');
+        }
+    }
+
+    readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                // Remove the data URL prefix to get just the base64
+                const base64 = reader.result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    createThumbnail(base64Data, mimeType) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const maxSize = 150;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxSize) {
+                        height = (height * maxSize) / width;
+                        width = maxSize;
+                    }
+                } else {
+                    if (height > maxSize) {
+                        width = (width * maxSize) / height;
+                        height = maxSize;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Get thumbnail as base64 (JPEG for smaller size)
+                const thumbnailData = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+                resolve(thumbnailData);
+            };
+            img.onerror = () => resolve(null);
+            img.src = `data:${mimeType};base64,${base64Data}`;
+        });
+    }
+
+    async openFilePreview(id) {
+        const file = this.files.find(f => f.id === id);
+        if (!file) return;
+
+        this.previewingFileId = id;
+
+        if (this.previewFileName) this.previewFileName.textContent = file.name;
+        if (this.previewFileSize) this.previewFileSize.textContent = this.formatFileSize(file.size);
+        if (this.previewFileDate) this.previewFileDate.textContent = this.formatDateTime(file.createdAt);
+
+        // Show preview
+        if (this.filePreviewBody) {
+            if (file.type.startsWith('image/')) {
+                // For images, load the full data
+                this.filePreviewBody.innerHTML = '<div class="loading">Loading...</div>';
+                try {
+                    const fileData = await this.loadFileData(id);
+                    this.filePreviewBody.innerHTML = `<img src="data:${file.type};base64,${fileData}" alt="${this.escapeHtml(file.name)}">`;
+                } catch (error) {
+                    this.filePreviewBody.innerHTML = `<div class="error">Failed to load image</div>`;
+                }
+            } else {
+                this.filePreviewBody.innerHTML = `<div class="file-icon-large">${this.getFileIcon(file.type)}</div>`;
+            }
+        }
+
+        if (this.filePreviewModal) this.filePreviewModal.classList.remove('hidden');
+    }
+
+    closeFilePreview() {
+        if (this.filePreviewModal) this.filePreviewModal.classList.add('hidden');
+        this.previewingFileId = null;
+    }
+
+    async downloadFile() {
+        if (!this.previewingFileId) return;
+        const file = this.files.find(f => f.id === this.previewingFileId);
+        if (!file) return;
+
+        try {
+            this.setSyncStatus('Downloading...', 'saving');
+            const fileData = await this.loadFileData(this.previewingFileId);
+
+            const link = document.createElement('a');
+            link.href = `data:${file.type};base64,${fileData}`;
+            link.download = file.name;
+            link.click();
+
+            this.setSyncStatus('Downloaded', 'saved');
+        } catch (error) {
+            console.error('Download error:', error);
+            this.setSyncStatus('Download failed', 'error');
+        }
+    }
+
+    async deleteFile() {
+        if (!this.previewingFileId) return;
+
+        if (!confirm('Delete this file?')) return;
+
+        const fileId = this.previewingFileId;
+
+        this.setSyncStatus('Deleting...', 'saving');
+
+        try {
+            // Delete the file blob from repo
+            await this.deleteFileBlob(fileId);
+
+            // Remove from index
+            this.files = this.files.filter(f => f.id !== fileId);
+            this.closeFilePreview();
+            this.renderFiles();
+
+            // Save updated index
+            await this.saveFilesIndex();
+
+            this.setSyncStatus('Deleted', 'saved');
+        } catch (error) {
+            console.error('Delete error:', error);
+            this.setSyncStatus('Delete failed: ' + error.message, 'error');
+        }
+    }
+
+    renderFiles() {
+        if (!this.filesList) return;
+
+        if (this.files.length === 0) {
+            this.filesList.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    No files yet. Upload one above!
+                </div>
+            `;
+        } else {
+            this.filesList.innerHTML = this.files.map(file => `
+                <div class="file-item" data-id="${file.id}">
+                    <div class="file-thumbnail">
+                        ${file.thumbnail
+                            ? `<img src="data:image/jpeg;base64,${file.thumbnail}" alt="">`
+                            : `<span class="file-icon">${this.getFileIcon(file.type)}</span>`
+                        }
+                    </div>
+                    <div class="file-name">${this.escapeHtml(file.name)}</div>
+                    <div class="file-meta">${this.formatFileSize(file.size)}</div>
+                </div>
+            `).join('');
+
+            this.filesList.querySelectorAll('.file-item').forEach(item => {
+                const id = item.dataset.id;
+                item.addEventListener('click', () => this.openFilePreview(id));
+            });
+        }
+
+        // Update footer
+        if (this.filesCount) {
+            this.filesCount.textContent = `${this.files.length} file${this.files.length !== 1 ? 's' : ''}`;
+        }
+        if (this.totalSize) {
+            const total = this.files.reduce((sum, f) => sum + f.size, 0);
+            this.totalSize.textContent = `${this.formatFileSize(total)} used`;
+        }
+    }
+
+    getFileIcon(mimeType) {
+        if (mimeType.startsWith('image/')) return '🖼️';
+        if (mimeType.startsWith('video/')) return '🎬';
+        if (mimeType.startsWith('audio/')) return '🎵';
+        if (mimeType.includes('pdf')) return '📄';
+        if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+        if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊';
+        if (mimeType.includes('zip') || mimeType.includes('archive')) return '📦';
+        if (mimeType.includes('text')) return '📃';
+        return '📁';
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
     formatDate(isoString) {
         const date = new Date(isoString);
         const now = new Date();
@@ -1345,6 +2021,69 @@ class GitHubTodoApp {
                 }
             }
 
+            // Re-encrypt and save files with new password
+            if (this.files.length > 0 || this.filesIndexSha) {
+                // Re-encrypt the files index
+                const filesIndexPlaintext = JSON.stringify(this.files, null, 2);
+                const filesIndexEncrypted = await Crypto.encrypt(filesIndexPlaintext, newPassword);
+
+                const filesIndexBody = {
+                    message: 'Re-encrypt files index with new password',
+                    content: btoa(filesIndexEncrypted)
+                };
+                if (this.filesIndexSha) {
+                    filesIndexBody.sha = this.filesIndexSha;
+                }
+
+                const filesIndexResponse = await this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${this.filesIndexFile}`,
+                    { method: 'PUT', body: JSON.stringify(filesIndexBody) }
+                );
+
+                if (!filesIndexResponse.ok) {
+                    const error = await filesIndexResponse.json();
+                    throw new Error('Failed to save files index: ' + (error.message || 'Unknown error'));
+                }
+
+                // Re-encrypt each individual file blob
+                for (const file of this.files) {
+                    try {
+                        // Load file data (uses cache if available)
+                        const fileData = await this.loadFileData(file.id);
+                        const filePath = `${this.filesDir}/${file.id}.encrypted`;
+
+                        // Get current file SHA
+                        const currentFileResponse = await this.githubFetch(
+                            `https://api.github.com/repos/${this.repo}/contents/${filePath}`
+                        );
+
+                        if (currentFileResponse.ok) {
+                            const currentFileData = await currentFileResponse.json();
+
+                            // Re-encrypt with new password
+                            const reEncrypted = await Crypto.encrypt(fileData, newPassword);
+
+                            const fileBody = {
+                                message: `Re-encrypt file ${file.id} with new password`,
+                                content: btoa(reEncrypted),
+                                sha: currentFileData.sha
+                            };
+
+                            const saveResponse = await this.githubFetch(
+                                `https://api.github.com/repos/${this.repo}/contents/${filePath}`,
+                                { method: 'PUT', body: JSON.stringify(fileBody) }
+                            );
+
+                            if (!saveResponse.ok) {
+                                console.warn(`Failed to re-encrypt file ${file.id}`);
+                            }
+                        }
+                    } catch (fileError) {
+                        console.warn(`Error re-encrypting file ${file.id}:`, fileError);
+                    }
+                }
+            }
+
             // Success - close modal and logout
             this.closeResetPasswordModal();
             alert('Password reset successful! Please sign in with your new password.');
@@ -1382,6 +2121,11 @@ class GitHubTodoApp {
         this.notesFileSha = null;
         this.currentTab = 'todos';
         this.editingNoteId = null;
+        // Clear files
+        this.files = [];
+        this.filesIndexSha = null;
+        this.previewingFileId = null;
+        this.fileDataCache.clear();
         if (this.tokenInput) this.tokenInput.value = '';
         if (this.repoInput) this.repoInput.value = '';
         if (this.passwordInput) this.passwordInput.value = '';

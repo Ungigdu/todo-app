@@ -923,6 +923,148 @@ header {
     min-height: 0;
 }
 
+/* Files Section */
+.add-file {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.file-size-info {
+    font-size: var(--font-size-small);
+    color: #888;
+}
+
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 15px;
+    padding: 15px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.file-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.file-item:hover {
+    background: #f0f0f0;
+    transform: translateY(-2px);
+}
+
+.file-thumbnail {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #e9ecef;
+}
+
+.file-thumbnail img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: cover;
+}
+
+.file-thumbnail .file-icon {
+    font-size: 32px;
+    color: #667eea;
+}
+
+.file-name {
+    font-size: var(--font-size-small);
+    color: #333;
+    text-align: center;
+    word-break: break-all;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.file-meta {
+    font-size: var(--font-size-small);
+    color: #999;
+    margin-top: 5px;
+}
+
+#total-size {
+    font-size: var(--font-size-small);
+    color: #888;
+}
+
+/* File Preview Modal */
+.file-preview-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+}
+
+.preview-file-name {
+    font-size: var(--font-size-big);
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-preview-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    min-height: 200px;
+    max-height: 60vh;
+    overflow: auto;
+    background: #f8f9fa;
+}
+
+.file-preview-body img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.file-preview-body .file-icon-large {
+    font-size: 80px;
+    color: #667eea;
+}
+
+.file-preview-info {
+    display: flex;
+    gap: 15px;
+    font-size: var(--font-size-small);
+    color: #888;
+}
+
+#file-preview-modal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#file-preview-modal.hidden {
+    display: none;
+}
+
 /* Reset Password Modal */
 .reset-password-content {
     max-width: 400px;

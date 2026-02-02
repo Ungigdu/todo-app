@@ -75,6 +75,7 @@
                     <nav class="sidebar-nav">
                         <button class="tab-btn active" data-tab="todos">Todos</button>
                         <button class="tab-btn" data-tab="notes">Notes</button>
+                        <button class="tab-btn" data-tab="files">Files</button>
                     </nav>
                 </div>
 
@@ -99,6 +100,24 @@
                     <div class="footer">
                         <span id="items-left">0 items left</span>
                         <button id="clear-completed" class="btn small">Clear Completed</button>
+                    </div>
+                </div>
+
+                <!-- Files Section -->
+                <div id="files-section" class="tab-content hidden">
+                    <div class="content-header">
+                        <div class="add-file">
+                            <input type="file" id="file-input" class="hidden">
+                            <button id="upload-file-btn" class="btn primary">Upload File</button>
+                            <span id="file-size-info" class="file-size-info">Max 75 MB per file</span>
+                        </div>
+                    </div>
+
+                    <div id="files-list" class="files-grid"></div>
+
+                    <div class="footer">
+                        <span id="files-count">0 files</span>
+                        <span id="total-size">0 KB used</span>
                     </div>
                 </div>
 
@@ -138,6 +157,27 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div id="file-preview-modal" class="modal hidden">
+        <div class="modal-content file-preview-content">
+            <div class="modal-header">
+                <span id="preview-file-name" class="preview-file-name"></span>
+                <button id="close-file-preview" class="btn small">&times;</button>
+            </div>
+            <div id="file-preview-body" class="file-preview-body"></div>
+            <div class="modal-footer">
+                <div class="file-preview-info">
+                    <span id="preview-file-size"></span>
+                    <span id="preview-file-date"></span>
+                </div>
+                <div class="modal-footer-right">
+                    <button id="download-file-btn" class="btn small">Download</button>
+                    <button id="delete-file-btn" class="btn small danger">Delete</button>
+                </div>
+            </div>
         </div>
     </div>
 
