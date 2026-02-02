@@ -14,6 +14,13 @@ body {
     background: #f5f5f5;
     margin: 0;
     padding: 0;
+    font-size: 15px;
+}
+
+/* Font size variables - only 2 sizes */
+:root {
+    --font-size-big: 15px;
+    --font-size-small: 12px;
 }
 
 .container {
@@ -58,11 +65,11 @@ body {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    height: 20px;
-    min-height: 20px;
+    height: 24px;
+    min-height: 24px;
     background: #22c55e;
     color: white;
-    font-size: 11px;
+    font-size: var(--font-size-small);
     font-weight: 500;
     flex-shrink: 0;
 }
@@ -85,7 +92,7 @@ body {
 }
 
 .sync-status-text {
-    font-size: 11px;
+    font-size: var(--font-size-small);
 }
 
 .sync-bar-btn {
@@ -94,7 +101,7 @@ body {
     color: inherit;
     padding: 2px 8px;
     border-radius: 3px;
-    font-size: 10px;
+    font-size: var(--font-size-small);
     cursor: pointer;
 }
 
@@ -180,7 +187,7 @@ body {
 
 .popup-username {
     display: block;
-    font-size: 12px;
+    font-size: var(--font-size-small);
     color: #333;
     font-weight: 600;
     margin-bottom: 8px;
@@ -191,7 +198,7 @@ body {
 .avatar-popup .btn {
     width: 100%;
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: var(--font-size-small);
     margin-bottom: 6px;
 }
 
@@ -212,7 +219,7 @@ body {
 
 .sidebar-header span {
     color: white;
-    font-size: 10px;
+    font-size: var(--font-size-small);
     text-align: center;
     word-break: break-all;
 }
@@ -230,7 +237,7 @@ body {
     padding: 15px 8px;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--font-size-big);
     transition: all 0.2s;
 }
 
@@ -326,7 +333,7 @@ h1 {
     padding: 12px;
     border: 2px solid #e1e1e1;
     border-radius: 8px;
-    font-size: 16px;
+    font-size: var(--font-size-big);
     transition: border-color 0.2s;
 }
 
@@ -337,7 +344,7 @@ h1 {
 
 .form-group small {
     color: #888;
-    font-size: 13px;
+    font-size: var(--font-size-small);
 }
 
 .form-group small a {
@@ -346,7 +353,7 @@ h1 {
 
 .token-saved {
     color: #27ae60;
-    font-size: 14px;
+    font-size: var(--font-size-small);
     padding: 10px;
     background: #e8f5e9;
     border-radius: 8px;
@@ -361,7 +368,7 @@ h1 {
     background: #f0f0f0;
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: var(--font-size-small);
 }
 
 /* Buttons */
@@ -369,7 +376,7 @@ h1 {
     padding: 12px 24px;
     border: none;
     border-radius: 8px;
-    font-size: 16px;
+    font-size: var(--font-size-big);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -393,7 +400,7 @@ h1 {
 
 .btn.small {
     padding: 8px 16px;
-    font-size: 14px;
+    font-size: var(--font-size-small);
     background: #f0f0f0;
     color: #666;
 }
@@ -404,7 +411,7 @@ h1 {
 
 .error {
     color: #e74c3c;
-    font-size: 14px;
+    font-size: var(--font-size-small);
     margin-top: 10px;
 }
 
@@ -432,7 +439,7 @@ header {
 
 .user-info span {
     color: #666;
-    font-size: 14px;
+    font-size: var(--font-size-small);
 }
 
 /* Add Todo */
@@ -447,7 +454,7 @@ header {
     padding: 8px 10px;
     border: 2px solid #e1e1e1;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--font-size-big);
     font-family: inherit;
     resize: none;
     overflow-y: hidden;
@@ -471,7 +478,7 @@ header {
     border: none;
     background: #f0f0f0;
     border-radius: 20px;
-    font-size: 14px;
+    font-size: var(--font-size-small);
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -519,7 +526,7 @@ header {
 
 .todo-text {
     flex: 1;
-    font-size: 16px;
+    font-size: var(--font-size-big);
     color: #333;
 }
 
@@ -527,7 +534,7 @@ header {
     background: none;
     border: none;
     color: #ccc;
-    font-size: 20px;
+    font-size: var(--font-size-big);
     cursor: pointer;
     padding: 5px;
     transition: color 0.2s;
@@ -548,13 +555,13 @@ header {
 
 #items-left {
     color: #888;
-    font-size: 14px;
+    font-size: var(--font-size-small);
 }
 
 /* Sync Status */
 .sync-status {
     text-align: center;
-    font-size: 13px;
+    font-size: var(--font-size-small);
     color: #888;
     margin-top: 15px;
 }
@@ -677,7 +684,7 @@ header {
     padding: 10px 20px;
     border: none;
     background: transparent;
-    font-size: 15px;
+    font-size: var(--font-size-big);
     font-weight: 600;
     color: #888;
     cursor: pointer;
@@ -721,7 +728,7 @@ header {
     padding: 8px 10px;
     border: 2px solid #e1e1e1;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--font-size-big);
     font-family: inherit;
     resize: none;
     overflow-y: hidden;
@@ -767,14 +774,14 @@ header {
 }
 
 .note-title {
-    font-size: 16px;
+    font-size: var(--font-size-big);
     font-weight: 500;
     color: #333;
     margin-bottom: 4px;
 }
 
 .note-preview {
-    font-size: 13px;
+    font-size: var(--font-size-small);
     color: #888;
     white-space: nowrap;
     overflow: hidden;
@@ -782,7 +789,7 @@ header {
 }
 
 .note-date {
-    font-size: 12px;
+    font-size: var(--font-size-small);
     color: #aaa;
 }
 
@@ -821,7 +828,7 @@ header {
     flex: 1;
     padding: 10px;
     border: none;
-    font-size: 18px;
+    font-size: var(--font-size-big);
     font-weight: 600;
     color: #333;
 }
@@ -839,7 +846,7 @@ header {
     min-height: 300px;
     padding: 20px;
     border: none;
-    font-size: 15px;
+    font-size: var(--font-size-big);
     line-height: 1.6;
     resize: none;
     font-family: inherit;
@@ -918,7 +925,7 @@ header {
 }
 
 .reset-password-content .modal-header h2 {
-    font-size: 18px;
+    font-size: var(--font-size-big);
     color: #333;
     margin: 0;
 }
@@ -954,6 +961,11 @@ header {
 
 /* Responsive - smaller screens */
 @media (max-width: 480px) {
+    :root {
+        --font-size-big: 14px;
+        --font-size-small: 11px;
+    }
+
     .sidebar {
         width: 60px;
         padding: 6px;
@@ -962,10 +974,6 @@ header {
     .sidebar-header img {
         width: 32px;
         height: 32px;
-    }
-
-    .sidebar-header span {
-        font-size: 8px;
     }
 
     .avatar-popup {
@@ -979,7 +987,6 @@ header {
 
     .sidebar-nav .tab-btn {
         padding: 12px 5px;
-        font-size: 12px;
     }
 
     .add-todo,
@@ -994,7 +1001,6 @@ header {
 
     .filter-btn {
         padding: 6px 12px;
-        font-size: 12px;
     }
 
     .content-header {

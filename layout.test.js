@@ -105,8 +105,8 @@ test.describe('Layout Tests', () => {
         expect(statusBar.width).toBeCloseTo(viewport.width, 0);
 
         // Status bar should be a single line (small height)
-        expect(statusBar.height).toBeLessThanOrEqual(24);
-        expect(statusBar.height).toBeGreaterThanOrEqual(16);
+        expect(statusBar.height).toBeLessThanOrEqual(28);
+        expect(statusBar.height).toBeGreaterThanOrEqual(20);
     });
 
     test('avatar popup should stay within viewport bounds', async ({ page }) => {
