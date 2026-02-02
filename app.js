@@ -1,99 +1,5 @@
 // GitHub Todo App with AES-256-GCM Encryption
 
-// Sync Tracker for debugging cross-device sync issues
-class SyncTracker {
-    constructor() {
-        this.logs = [];
-        this.maxLogs = 100;
-        this.logElement = null;
-        this.localTodosShaElement = null;
-        this.localActionsShaElement = null;
-    }
-
-    init() {
-        this.logElement = document.getElementById('tracker-log');
-        this.localTodosShaElement = document.getElementById('local-todos-sha');
-        this.localActionsShaElement = document.getElementById('local-actions-sha');
-    }
-
-    log(type, message, details = null) {
-        const entry = {
-            time: new Date().toISOString(),
-            type,
-            message,
-            details
-        };
-        this.logs.unshift(entry);
-        if (this.logs.length > this.maxLogs) {
-            this.logs.pop();
-        }
-        this.render();
-        console.log(`[SyncTracker:${type}]`, message, details || '');
-    }
-
-    info(message, details) { this.log('info', message, details); }
-    success(message, details) { this.log('success', message, details); }
-    warning(message, details) { this.log('warning', message, details); }
-    error(message, details) { this.log('error', message, details); }
-    conflict(message, details) { this.log('conflict', message, details); }
-
-    updateShaDisplay(todosSha, actionsSha) {
-        if (this.localTodosShaElement) {
-            this.localTodosShaElement.textContent = todosSha ? todosSha.substring(0, 12) + '...' : '-';
-            this.localTodosShaElement.title = todosSha || '';
-        }
-        if (this.localActionsShaElement) {
-            this.localActionsShaElement.textContent = actionsSha ? actionsSha.substring(0, 12) + '...' : '-';
-            this.localActionsShaElement.title = actionsSha || '';
-        }
-    }
-
-    render() {
-        if (!this.logElement) return;
-
-        this.logElement.innerHTML = this.logs.map(entry => {
-            const time = new Date(entry.time).toLocaleTimeString();
-            let detailsHtml = '';
-            if (entry.details) {
-                if (typeof entry.details === 'object') {
-                    detailsHtml = `<div class="tracker-details"><code>${JSON.stringify(entry.details, null, 2)}</code></div>`;
-                } else {
-                    detailsHtml = `<div class="tracker-details">${entry.details}</div>`;
-                }
-            }
-            return `
-                <li class="tracker-entry ${entry.type}">
-                    <span class="tracker-time">${time}</span>
-                    <span class="tracker-type">${entry.type}</span>
-                    <span class="tracker-message">${entry.message}</span>
-                    ${detailsHtml}
-                </li>
-            `;
-        }).join('');
-    }
-
-    clear() {
-        this.logs = [];
-        this.render();
-    }
-
-    copyToClipboard() {
-        const text = this.logs.map(entry => {
-            let line = `[${entry.time}] [${entry.type.toUpperCase()}] ${entry.message}`;
-            if (entry.details) {
-                line += '\n  ' + JSON.stringify(entry.details);
-            }
-            return line;
-        }).join('\n');
-        navigator.clipboard.writeText(text).then(() => {
-            alert('Tracker logs copied to clipboard!');
-        });
-    }
-}
-
-// Global sync tracker instance
-const syncTracker = new SyncTracker();
-
 // Encryption utilities using Web Crypto API
 class Crypto {
     static async deriveKey(password, salt) {
@@ -176,16 +82,9 @@ class GitHubTodoApp {
         this.currentFilter = 'all';
         this.fileSha = null;
         this.dataFile = 'todos.encrypted';
-        this.actionsFile = 'actions.encrypted';
 
         // Sync settings
         this.isSyncing = false;
-        this.actionsSha = null;
-        this.actions = [];
-        this.maxActionsToShow = 20;
-
-        // Device ID - unique per device, persisted
-        this.deviceId = this.getOrCreateDeviceId();
 
         // Notes
         this.notes = [];
@@ -206,32 +105,6 @@ class GitHubTodoApp {
         this.initElements();
         this.bindEvents();
         this.init();
-
-        // Initialize sync tracker
-        syncTracker.init();
-        syncTracker.info('App initialized', { deviceId: this.deviceId, deviceName: this.getDeviceDisplayName() });
-    }
-
-    getOrCreateDeviceId() {
-        let deviceId = localStorage.getItem('device_id');
-        if (!deviceId) {
-            // Generate a short unique ID for this device
-            deviceId = 'dev_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-            localStorage.setItem('device_id', deviceId);
-        }
-        return deviceId;
-    }
-
-    getDeviceDisplayName() {
-        // Try to get a friendly device name
-        const ua = navigator.userAgent;
-        if (/iPhone/.test(ua)) return 'iPhone';
-        if (/iPad/.test(ua)) return 'iPad';
-        if (/Android/.test(ua)) return 'Android';
-        if (/Mac/.test(ua)) return 'Mac';
-        if (/Windows/.test(ua)) return 'Windows';
-        if (/Linux/.test(ua)) return 'Linux';
-        return 'Device';
     }
 
     initElements() {
@@ -275,16 +148,6 @@ class GitHubTodoApp {
 
         // Sync elements
         this.syncNowBtn = document.getElementById('sync-now-btn');
-        this.toggleHistoryBtn = document.getElementById('toggle-history-btn');
-        this.actionHistory = document.getElementById('action-history');
-        this.actionList = document.getElementById('action-list');
-        this.deviceIdDisplay = document.getElementById('device-id-display');
-
-        // Tracker elements
-        this.toggleTrackerBtn = document.getElementById('toggle-tracker-btn');
-        this.syncTrackerPanel = document.getElementById('sync-tracker');
-        this.clearTrackerBtn = document.getElementById('clear-tracker-btn');
-        this.copyTrackerBtn = document.getElementById('copy-tracker-btn');
 
         // Tabs
         this.tabBtns = document.querySelectorAll('.tab-btn');
@@ -347,20 +210,6 @@ class GitHubTodoApp {
         if (this.syncNowBtn) {
             this.syncNowBtn.addEventListener('click', () => this.manualSync());
         }
-        if (this.toggleHistoryBtn) {
-            this.toggleHistoryBtn.addEventListener('click', () => this.toggleActionHistory());
-        }
-
-        // Tracker events
-        if (this.toggleTrackerBtn) {
-            this.toggleTrackerBtn.addEventListener('click', () => this.toggleSyncTracker());
-        }
-        if (this.clearTrackerBtn) {
-            this.clearTrackerBtn.addEventListener('click', () => syncTracker.clear());
-        }
-        if (this.copyTrackerBtn) {
-            this.copyTrackerBtn.addEventListener('click', () => syncTracker.copyToClipboard());
-        }
 
         // Tab events
         this.tabBtns.forEach(btn => {
@@ -398,16 +247,6 @@ class GitHubTodoApp {
             this.noteModal.addEventListener('click', (e) => {
                 if (e.target === this.noteModal) this.closeNoteModal();
             });
-        }
-    }
-
-    toggleSyncTracker() {
-        if (this.syncTrackerPanel) {
-            this.syncTrackerPanel.classList.toggle('hidden');
-            if (this.toggleTrackerBtn) {
-                const isHidden = this.syncTrackerPanel.classList.contains('hidden');
-                this.toggleTrackerBtn.textContent = isHidden ? 'Show Sync Tracker' : 'Hide Sync Tracker';
-            }
         }
     }
 
@@ -552,11 +391,6 @@ class GitHubTodoApp {
                 this.popupUserName.textContent = this.user.login;
             }
         }
-
-        // Display device ID
-        if (this.deviceIdDisplay) {
-            this.deviceIdDisplay.textContent = `${this.getDeviceDisplayName()} (${this.deviceId.slice(-6)})`;
-        }
     }
 
     async login() {
@@ -633,69 +467,28 @@ class GitHubTodoApp {
 
     async loadTodos() {
         this.setSyncStatus('Loading...', '');
-        syncTracker.info('Starting loadTodos...');
         try {
-            // Load todos and actions in parallel
-            syncTracker.info('Fetching todos and actions from GitHub...');
-            const [todosResponse, actionsResponse] = await Promise.all([
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
-            ]);
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
+            );
 
-            syncTracker.info('Received responses', {
-                todosStatus: todosResponse.status,
-                actionsStatus: actionsResponse.status
-            });
-
-            // Load todos
-            if (todosResponse.ok) {
-                const data = await todosResponse.json();
-                const oldSha = this.fileSha;
+            if (response.ok) {
+                const data = await response.json();
                 this.fileSha = data.sha;
                 const encryptedContent = atob(data.content);
                 const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                 this.todos = JSON.parse(decrypted);
-                syncTracker.success('Loaded todos from remote', {
-                    todoCount: this.todos.length,
-                    oldSha: oldSha ? oldSha.substring(0, 12) : null,
-                    newSha: this.fileSha.substring(0, 12)
-                });
-            } else if (todosResponse.status === 404) {
+            } else if (response.status === 404) {
                 this.todos = [];
                 this.fileSha = null;
-                syncTracker.info('No todos file found (404), starting fresh');
             } else {
-                syncTracker.error('Failed to load todos', { status: todosResponse.status });
                 throw new Error('Failed to load todos');
             }
 
-            // Load actions
-            if (actionsResponse.ok) {
-                const data = await actionsResponse.json();
-                this.actionsSha = data.sha;
-                const encryptedContent = atob(data.content);
-                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
-                this.actions = JSON.parse(decrypted);
-                syncTracker.success('Loaded actions from remote', {
-                    actionCount: this.actions.length,
-                    sha: this.actionsSha.substring(0, 12)
-                });
-            } else if (actionsResponse.status === 404) {
-                this.actions = [];
-                this.actionsSha = null;
-                syncTracker.info('No actions file found (404), starting fresh');
-            }
-
-            // Update SHA display
-            syncTracker.updateShaDisplay(this.fileSha, this.actionsSha);
-
             this.renderTodos();
-            this.renderActions();
             this.setSyncStatus('Synced', 'saved');
-            syncTracker.success('loadTodos completed successfully');
         } catch (error) {
             console.error('Load error:', error);
-            syncTracker.error('loadTodos failed', { error: error.message });
             if (error.message.includes('Decryption failed')) {
                 throw new Error('Wrong encryption password');
             }
@@ -704,110 +497,37 @@ class GitHubTodoApp {
         }
     }
 
-    async saveTodos(action = null, retryCount = 0) {
+    async saveTodos(retryCount = 0) {
         const maxRetries = 3;
         this.setSyncStatus('Checking remote state...', 'saving');
-        syncTracker.info(`saveTodos started (attempt ${retryCount + 1}/${maxRetries + 1})`, {
-            action: action ? action.type : null,
-            localTodosSha: this.fileSha ? this.fileSha.substring(0, 12) : null,
-            localActionsSha: this.actionsSha ? this.actionsSha.substring(0, 12) : null
-        });
 
         try {
-            // Record the action if provided (only on first attempt)
-            // Note: When using scheduleSave, action is null since it's already recorded
-            if (action && retryCount === 0) {
-                this.recordAction(action);
-                syncTracker.info('Recorded action', { type: action.type, description: action.description });
-            }
-
             // First, fetch current remote state to check for conflicts
-            syncTracker.info('Fetching remote state to check for conflicts...');
-            const [remoteTodosResponse, remoteActionsResponse] = await Promise.all([
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
-            ]);
-
-            syncTracker.info('Remote state responses received', {
-                todosStatus: remoteTodosResponse.status,
-                actionsStatus: remoteActionsResponse.status
-            });
+            const remoteTodosResponse = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
+            );
 
             // Check for todos conflict and merge if needed
             if (remoteTodosResponse.ok) {
                 const remoteData = await remoteTodosResponse.json();
-                const remoteSha = remoteData.sha;
-                syncTracker.info('Remote todos SHA comparison', {
-                    localSha: this.fileSha ? this.fileSha.substring(0, 12) : null,
-                    remoteSha: remoteSha.substring(0, 12),
-                    match: remoteSha === this.fileSha
-                });
-
                 if (remoteData.sha !== this.fileSha) {
                     // Remote has changed - merge todos
-                    syncTracker.conflict('CONFLICT DETECTED: Remote todos changed since last sync', {
-                        localSha: this.fileSha ? this.fileSha.substring(0, 12) : 'null',
-                        remoteSha: remoteSha.substring(0, 12)
-                    });
                     const encryptedContent = atob(remoteData.content);
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     const remoteTodos = JSON.parse(decrypted);
-                    syncTracker.info('Remote todos decrypted', {
-                        remoteTodoCount: remoteTodos.length,
-                        localTodoCount: this.todos.length
-                    });
-                    const mergedTodos = this.mergeTodos(remoteTodos, this.todos);
-                    syncTracker.success('Todos merged', {
-                        beforeCount: this.todos.length,
-                        afterCount: mergedTodos.length,
-                        remoteTodoCount: remoteTodos.length
-                    });
-                    this.todos = mergedTodos;
+                    this.todos = this.mergeTodos(remoteTodos, this.todos);
                     this.fileSha = remoteData.sha;
                 }
             } else if (remoteTodosResponse.status === 404) {
-                syncTracker.info('Remote todos file not found (404), will create new');
                 this.fileSha = null;
             }
 
-            // Check for actions conflict and merge if needed
-            if (remoteActionsResponse.ok) {
-                const remoteData = await remoteActionsResponse.json();
-                const remoteSha = remoteData.sha;
-                syncTracker.info('Remote actions SHA comparison', {
-                    localSha: this.actionsSha ? this.actionsSha.substring(0, 12) : null,
-                    remoteSha: remoteSha.substring(0, 12),
-                    match: remoteSha === this.actionsSha
-                });
-
-                if (remoteData.sha !== this.actionsSha) {
-                    syncTracker.conflict('CONFLICT DETECTED: Remote actions changed since last sync', {
-                        localSha: this.actionsSha ? this.actionsSha.substring(0, 12) : 'null',
-                        remoteSha: remoteSha.substring(0, 12)
-                    });
-                    const encryptedContent = atob(remoteData.content);
-                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
-                    const remoteActions = JSON.parse(decrypted);
-                    this.actions = this.mergeActions(remoteActions, this.actions);
-                    this.actionsSha = remoteData.sha;
-                    syncTracker.success('Actions merged');
-                }
-            } else if (remoteActionsResponse.status === 404) {
-                syncTracker.info('Remote actions file not found (404), will create new');
-                this.actionsSha = null;
-            }
-
             this.setSyncStatus('Encrypting & saving...', 'saving');
-            syncTracker.info('Encrypting data...');
 
-            // Encrypt todos and actions
+            // Encrypt todos
             const todosPlaintext = JSON.stringify(this.todos, null, 2);
             const todosEncrypted = await Crypto.encrypt(todosPlaintext, this.encryptionPassword);
 
-            const actionsPlaintext = JSON.stringify(this.actions, null, 2);
-            const actionsEncrypted = await Crypto.encrypt(actionsPlaintext, this.encryptionPassword);
-
-            // Prepare both requests
             const todosBody = {
                 message: 'Update encrypted todos',
                 content: btoa(todosEncrypted)
@@ -816,181 +536,53 @@ class GitHubTodoApp {
                 todosBody.sha = this.fileSha;
             }
 
-            const actionsBody = {
-                message: 'Update action log',
-                content: btoa(actionsEncrypted)
-            };
-            if (this.actionsSha) {
-                actionsBody.sha = this.actionsSha;
-            }
-
-            syncTracker.info('Sending PUT requests to GitHub', {
-                todosSha: this.fileSha ? this.fileSha.substring(0, 12) : 'new',
-                actionsSha: this.actionsSha ? this.actionsSha.substring(0, 12) : 'new'
-            });
-
-            // Save both files
-            const [todosResponse, actionsResponse] = await Promise.all([
-                this.githubFetch(
-                    `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`,
-                    { method: 'PUT', body: JSON.stringify(todosBody) }
-                ),
-                this.githubFetch(
-                    `https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`,
-                    { method: 'PUT', body: JSON.stringify(actionsBody) }
-                )
-            ]);
-
-            syncTracker.info('PUT responses received', {
-                todosStatus: todosResponse.status,
-                actionsStatus: actionsResponse.status
-            });
+            const todosResponse = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`,
+                { method: 'PUT', body: JSON.stringify(todosBody) }
+            );
 
             if (!todosResponse.ok) {
                 const error = await todosResponse.json();
-                syncTracker.error('Failed to save todos', {
-                    status: todosResponse.status,
-                    message: error.message,
-                    usedSha: this.fileSha ? this.fileSha.substring(0, 12) : 'null'
-                });
-
-                // Check if this is a SHA mismatch (409 conflict or message contains "does not match")
+                // Check if this is a SHA mismatch (409 conflict)
                 if (todosResponse.status === 409 || (error.message && error.message.includes('does not match'))) {
                     if (retryCount < maxRetries) {
-                        syncTracker.warning(`SHA mismatch detected, retrying (${retryCount + 1}/${maxRetries})...`);
-                        // Clear the SHA so we fetch fresh on retry
                         this.fileSha = null;
-                        this.actionsSha = null;
-                        return await this.saveTodos(null, retryCount + 1);
+                        return await this.saveTodos(retryCount + 1);
                     }
                 }
                 throw new Error(error.message || 'Failed to save todos');
             }
 
             const todosData = await todosResponse.json();
-            const oldTodosSha = this.fileSha;
             this.fileSha = todosData.content.sha;
-            syncTracker.success('Todos saved successfully', {
-                oldSha: oldTodosSha ? oldTodosSha.substring(0, 12) : 'new',
-                newSha: this.fileSha.substring(0, 12)
-            });
-
-            if (actionsResponse.ok) {
-                const actionsData = await actionsResponse.json();
-                const oldActionsSha = this.actionsSha;
-                this.actionsSha = actionsData.content.sha;
-                syncTracker.success('Actions saved successfully', {
-                    oldSha: oldActionsSha ? oldActionsSha.substring(0, 12) : 'new',
-                    newSha: this.actionsSha.substring(0, 12)
-                });
-            } else {
-                const actionsError = await actionsResponse.json().catch(() => ({}));
-                syncTracker.warning('Actions save failed (non-critical)', {
-                    status: actionsResponse.status,
-                    message: actionsError.message
-                });
-            }
-
-            // Update SHA display
-            syncTracker.updateShaDisplay(this.fileSha, this.actionsSha);
 
             this.renderTodos();
-            this.renderActions();
             this.setSyncStatus('Saved', 'saved');
-            syncTracker.success('saveTodos completed successfully');
         } catch (error) {
             console.error('Save error:', error);
-            syncTracker.error('saveTodos failed', { error: error.message, retryCount });
             this.setSyncStatus('Failed to save: ' + error.message, 'error');
         }
     }
 
     mergeTodos(remoteTodos, localTodos) {
-        syncTracker.info('Merging todos...', {
-            remoteCount: remoteTodos.length,
-            localCount: localTodos.length
-        });
-
         // Create a map of all todos by ID
         const todoMap = new Map();
-        const remoteIds = new Set();
-        const localIds = new Set();
 
         // Add remote todos first
         for (const todo of remoteTodos) {
             todoMap.set(todo.id, todo);
-            remoteIds.add(todo.id);
         }
 
-        // Merge local todos - local changes take precedence for existing items
-        let overwritten = 0;
-        let newFromLocal = 0;
+        // Merge local todos - local changes take precedence
         for (const todo of localTodos) {
-            localIds.add(todo.id);
-            if (todoMap.has(todo.id)) {
-                overwritten++;
-            } else {
-                newFromLocal++;
-            }
             todoMap.set(todo.id, todo);
         }
-
-        // Calculate stats
-        const onlyInRemote = [...remoteIds].filter(id => !localIds.has(id)).length;
-        const onlyInLocal = [...localIds].filter(id => !remoteIds.has(id)).length;
-        const inBoth = [...remoteIds].filter(id => localIds.has(id)).length;
-
-        syncTracker.info('Merge stats', {
-            onlyInRemote,
-            onlyInLocal,
-            inBoth,
-            localOverwroteRemote: overwritten
-        });
 
         // Convert back to array and sort by createdAt (newest first)
         const merged = Array.from(todoMap.values());
         merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         return merged;
-    }
-
-    mergeActions(remoteActions, localActions) {
-        // Create a map of all actions by ID
-        const actionMap = new Map();
-
-        // Add all actions
-        for (const action of remoteActions) {
-            actionMap.set(action.id, action);
-        }
-        for (const action of localActions) {
-            actionMap.set(action.id, action);
-        }
-
-        // Convert back to array and sort by timestamp (newest first)
-        const merged = Array.from(actionMap.values());
-        merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-        // Keep only the last 50 actions
-        return merged.slice(0, 50);
-    }
-
-    recordAction(action) {
-        const actionRecord = {
-            id: Date.now().toString(),
-            type: action.type,
-            description: action.description,
-            deviceId: this.deviceId,
-            deviceName: this.getDeviceDisplayName(),
-            timestamp: new Date().toISOString(),
-            todoId: action.todoId || null
-        };
-
-        this.actions.unshift(actionRecord);
-
-        // Keep only the last 50 actions
-        if (this.actions.length > 50) {
-            this.actions = this.actions.slice(0, 50);
-        }
     }
 
     async githubFetch(url, options = {}) {
@@ -1014,12 +606,7 @@ class GitHubTodoApp {
         }
     }
 
-    scheduleSave(action = null) {
-        // Record action immediately
-        if (action) {
-            this.recordAction(action);
-        }
-
+    scheduleSave() {
         // Mark pending save
         this.pendingSave = true;
         this.setSyncStatus('Changes pending...', 'pending');
@@ -1041,8 +628,7 @@ class GitHubTodoApp {
         this.pendingSave = false;
         this.saveDebounceTimer = null;
 
-        // Call saveTodos without action (actions already recorded)
-        await this.saveTodos(null);
+        await this.saveTodos();
     }
 
     scheduleNotesSave() {
@@ -1085,11 +671,7 @@ class GitHubTodoApp {
         this.newTodoInput.value = '';
         this.newTodoInput.style.height = 'auto'; // Reset height after clearing
         this.renderTodos();
-        this.scheduleSave({
-            type: 'add',
-            description: `Added "${this.truncateText(text, 30)}"`,
-            todoId: todo.id
-        });
+        this.scheduleSave();
     }
 
     toggleTodo(id) {
@@ -1097,24 +679,14 @@ class GitHubTodoApp {
         if (todo) {
             todo.completed = !todo.completed;
             this.renderTodos();
-            this.scheduleSave({
-                type: 'toggle',
-                description: `${todo.completed ? 'Completed' : 'Uncompleted'} "${this.truncateText(todo.text, 30)}"`,
-                todoId: id
-            });
+            this.scheduleSave();
         }
     }
 
     deleteTodo(id) {
-        const todo = this.todos.find(t => t.id === id);
-        const text = todo ? todo.text : 'item';
         this.todos = this.todos.filter(t => t.id !== id);
         this.renderTodos();
-        this.scheduleSave({
-            type: 'delete',
-            description: `Deleted "${this.truncateText(text, 30)}"`,
-            todoId: id
-        });
+        this.scheduleSave();
     }
 
     clearCompleted() {
@@ -1123,14 +695,7 @@ class GitHubTodoApp {
 
         this.todos = this.todos.filter(t => !t.completed);
         this.renderTodos();
-        this.scheduleSave({
-            type: 'clear',
-            description: `Cleared ${count} completed item${count !== 1 ? 's' : ''}`
-        });
-    }
-
-    truncateText(text, maxLength) {
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        this.scheduleSave();
     }
 
     setFilter(filter) {
@@ -1199,18 +764,10 @@ class GitHubTodoApp {
 
     // Sync Methods
     async syncFromRemote() {
-        if (this.isSyncing) {
-            syncTracker.warning('Sync already in progress, skipping');
-            return;
-        }
+        if (this.isSyncing) return;
 
         this.isSyncing = true;
-        this.setSyncStatus('Syncing changes...', 'syncing');
-        syncTracker.info('Manual sync started (syncFromRemote)', {
-            currentTodosSha: this.fileSha ? this.fileSha.substring(0, 12) : null,
-            currentActionsSha: this.actionsSha ? this.actionsSha.substring(0, 12) : null,
-            localTodoCount: this.todos.length
-        });
+        this.setSyncStatus('Syncing...', 'syncing');
 
         if (this.syncNowBtn) {
             this.syncNowBtn.classList.add('syncing');
@@ -1218,177 +775,40 @@ class GitHubTodoApp {
         }
 
         try {
-            // Load both todos and actions from remote
-            syncTracker.info('Fetching remote data...');
-            const [todosResponse, actionsResponse] = await Promise.all([
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`),
-                this.githubFetch(`https://api.github.com/repos/${this.repo}/contents/${this.actionsFile}`)
-            ]);
-
-            syncTracker.info('Remote responses received', {
-                todosStatus: todosResponse.status,
-                actionsStatus: actionsResponse.status
-            });
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`
+            );
 
             let todosChanged = false;
-            let actionsChanged = false;
 
-            if (todosResponse.ok) {
-                const data = await todosResponse.json();
-                const oldSha = this.fileSha;
-                const newSha = data.sha;
-
-                syncTracker.info('Todos SHA comparison', {
-                    localSha: oldSha ? oldSha.substring(0, 12) : null,
-                    remoteSha: newSha.substring(0, 12),
-                    match: oldSha === newSha
-                });
-
-                if (oldSha !== newSha) {
+            if (response.ok) {
+                const data = await response.json();
+                if (this.fileSha !== data.sha) {
                     todosChanged = true;
-                    this.fileSha = newSha;
+                    this.fileSha = data.sha;
                     const encryptedContent = atob(data.content);
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
-                    const remoteTodos = JSON.parse(decrypted);
-                    const oldCount = this.todos.length;
-                    this.todos = remoteTodos;
-                    syncTracker.success('Todos updated from remote', {
-                        oldCount,
-                        newCount: remoteTodos.length,
-                        oldSha: oldSha ? oldSha.substring(0, 12) : null,
-                        newSha: newSha.substring(0, 12)
-                    });
-                } else {
-                    syncTracker.info('Todos unchanged (SHA match)');
+                    this.todos = JSON.parse(decrypted);
                 }
-            } else {
-                syncTracker.warning('Failed to fetch todos', { status: todosResponse.status });
             }
-
-            if (actionsResponse.ok) {
-                const data = await actionsResponse.json();
-                const oldSha = this.actionsSha;
-                const newSha = data.sha;
-
-                syncTracker.info('Actions SHA comparison', {
-                    localSha: oldSha ? oldSha.substring(0, 12) : null,
-                    remoteSha: newSha.substring(0, 12),
-                    match: oldSha === newSha
-                });
-
-                if (oldSha !== newSha) {
-                    actionsChanged = true;
-                    this.actionsSha = newSha;
-                    const encryptedContent = atob(data.content);
-                    const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
-                    this.actions = JSON.parse(decrypted);
-                    syncTracker.success('Actions updated from remote', {
-                        actionCount: this.actions.length,
-                        oldSha: oldSha ? oldSha.substring(0, 12) : null,
-                        newSha: newSha.substring(0, 12)
-                    });
-                } else {
-                    syncTracker.info('Actions unchanged (SHA match)');
-                }
-            } else {
-                syncTracker.warning('Failed to fetch actions', { status: actionsResponse.status });
-            }
-
-            // Update SHA display
-            syncTracker.updateShaDisplay(this.fileSha, this.actionsSha);
 
             this.renderTodos();
-            this.renderActions();
-
-            if (todosChanged || actionsChanged) {
-                this.setSyncStatus('Synced - data updated', 'saved');
-                syncTracker.success('Sync completed with changes', {
-                    todosChanged,
-                    actionsChanged
-                });
-            } else {
-                this.setSyncStatus('Synced - no changes', 'saved');
-                syncTracker.info('Sync completed - no changes detected');
-            }
+            this.setSyncStatus(todosChanged ? 'Synced - updated' : 'Synced', 'saved');
 
         } catch (error) {
             console.error('Sync error:', error);
-            syncTracker.error('Sync failed', { error: error.message });
             this.setSyncStatus('Sync failed: ' + error.message, 'error');
         } finally {
             this.isSyncing = false;
             if (this.syncNowBtn) {
                 this.syncNowBtn.classList.remove('syncing');
-                this.syncNowBtn.textContent = 'Sync Now';
+                this.syncNowBtn.textContent = 'Sync';
             }
         }
     }
 
     async manualSync() {
         await this.syncFromRemote();
-    }
-
-    toggleActionHistory() {
-        if (this.actionHistory) {
-            this.actionHistory.classList.toggle('hidden');
-            if (this.toggleHistoryBtn) {
-                const isHidden = this.actionHistory.classList.contains('hidden');
-                this.toggleHistoryBtn.textContent = isHidden ? 'Action History' : 'Hide History';
-            }
-        }
-    }
-
-    renderActions() {
-        if (!this.actionList) return;
-
-        const actionsToShow = this.actions.slice(0, this.maxActionsToShow);
-
-        if (actionsToShow.length === 0) {
-            this.actionList.innerHTML = '<li class="empty-state">No actions recorded yet</li>';
-            return;
-        }
-
-        this.actionList.innerHTML = actionsToShow.map(action => {
-            const isOtherDevice = action.deviceId !== this.deviceId;
-            const timeAgo = this.getTimeAgo(new Date(action.timestamp));
-            const icon = this.getActionIcon(action.type);
-
-            return `
-                <li class="action-item ${isOtherDevice ? 'from-other-device' : ''}">
-                    <span class="action-icon ${action.type}">${icon}</span>
-                    <div class="action-details">
-                        <div class="action-text">${this.escapeHtml(action.description)}</div>
-                        <div class="action-meta">
-                            ${timeAgo}
-                            <span class="action-device ${isOtherDevice ? 'other' : ''}">
-                                ${action.deviceName || 'Unknown'}${isOtherDevice ? '' : ' (this device)'}
-                            </span>
-                        </div>
-                    </div>
-                </li>
-            `;
-        }).join('');
-    }
-
-    getActionIcon(type) {
-        switch (type) {
-            case 'add': return '+';
-            case 'toggle': return '✓';
-            case 'delete': return '×';
-            case 'clear': return '⌫';
-            default: return '•';
-        }
-    }
-
-    getTimeAgo(date) {
-        const seconds = Math.floor((new Date() - date) / 1000);
-
-        if (seconds < 60) return 'just now';
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-
-        return date.toLocaleDateString();
     }
 
     // Tab switching
@@ -1639,9 +1059,7 @@ class GitHubTodoApp {
         this.encryptionPassword = null;
         this.user = null;
         this.todos = [];
-        this.actions = [];
         this.fileSha = null;
-        this.actionsSha = null;
         this.isFirstTimeSetup = false;
         // Clear notes
         this.notes = [];
@@ -1658,8 +1076,6 @@ class GitHubTodoApp {
         if (this.confirmPasswordGroup) this.confirmPasswordGroup.classList.add('hidden');
         if (this.checkBtn) this.checkBtn.classList.remove('hidden');
         if (this.loginBtn) this.loginBtn.classList.add('hidden');
-        if (this.actionHistory) this.actionHistory.classList.add('hidden');
-        if (this.toggleHistoryBtn) this.toggleHistoryBtn.textContent = 'Action History';
         this.showLoginScreen();
     }
 }
