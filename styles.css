@@ -259,25 +259,6 @@ body {
     margin: 0;
 }
 
-/* Full-screen modal - mobile optimized */
-.modal {
-    padding: 0;
-    align-items: stretch;
-}
-
-.modal-content {
-    max-width: 100%;
-    max-height: none;
-    height: 100%;
-    border-radius: 0;
-    width: 100%;
-}
-
-#modal-note-content {
-    flex: 1;
-    min-height: 0;
-}
-
 .hidden {
     display: none !important;
 }
@@ -1130,6 +1111,27 @@ header {
 .btn.copied {
     background: #d1fae5;
     color: #059669;
+}
+
+/* Full-screen note modal - override base modal styles */
+#note-modal {
+    padding: 0;
+    display: block;
+}
+
+#note-modal .modal-content {
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    width: 100%;
+    border-radius: 0;
+    position: absolute;
+    inset: 0;
+}
+
+#note-modal #modal-note-content {
+    flex: 1;
+    min-height: 0;
 }
 
 /* Responsive - smaller screens */
