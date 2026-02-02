@@ -251,6 +251,10 @@ body {
     color: white;
 }
 
+.sidebar-nav .tab-btn.active::after {
+    display: none;
+}
+
 
 /* Main Content */
 .main-content {
