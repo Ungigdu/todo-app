@@ -187,6 +187,13 @@ class GitHubTodoApp {
         // Device ID - unique per device, persisted
         this.deviceId = this.getOrCreateDeviceId();
 
+        // Notes
+        this.notes = [];
+        this.notesFileSha = null;
+        this.notesDataFile = 'notes.encrypted';
+        this.currentTab = 'todos';
+        this.editingNoteId = null;
+
         this.initElements();
         this.bindEvents();
         this.init();
@@ -266,6 +273,26 @@ class GitHubTodoApp {
         this.syncTrackerPanel = document.getElementById('sync-tracker');
         this.clearTrackerBtn = document.getElementById('clear-tracker-btn');
         this.copyTrackerBtn = document.getElementById('copy-tracker-btn');
+
+        // Tabs
+        this.tabBtns = document.querySelectorAll('.tab-btn');
+        this.todosSection = document.getElementById('todos-section');
+        this.notesSection = document.getElementById('notes-section');
+
+        // Notes elements
+        this.newNoteTitleInput = document.getElementById('new-note-title');
+        this.addNoteBtn = document.getElementById('add-note-btn');
+        this.notesList = document.getElementById('notes-list');
+        this.notesCount = document.getElementById('notes-count');
+
+        // Modal elements
+        this.noteModal = document.getElementById('note-modal');
+        this.modalNoteTitle = document.getElementById('modal-note-title');
+        this.modalNoteContent = document.getElementById('modal-note-content');
+        this.closeModalBtn = document.getElementById('close-modal');
+        this.copyNoteBtn = document.getElementById('copy-note-btn');
+        this.saveNoteBtn = document.getElementById('save-note-btn');
+        this.deleteNoteBtn = document.getElementById('delete-note-btn');
     }
 
     bindEvents() {
@@ -302,6 +329,40 @@ class GitHubTodoApp {
         }
         if (this.copyTrackerBtn) {
             this.copyTrackerBtn.addEventListener('click', () => syncTracker.copyToClipboard());
+        }
+
+        // Tab events
+        this.tabBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+        });
+
+        // Notes events
+        if (this.addNoteBtn) {
+            this.addNoteBtn.addEventListener('click', () => this.addNote());
+        }
+        if (this.newNoteTitleInput) {
+            this.newNoteTitleInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.addNote();
+            });
+        }
+
+        // Modal events
+        if (this.closeModalBtn) {
+            this.closeModalBtn.addEventListener('click', () => this.closeNoteModal());
+        }
+        if (this.saveNoteBtn) {
+            this.saveNoteBtn.addEventListener('click', () => this.saveNoteFromModal());
+        }
+        if (this.copyNoteBtn) {
+            this.copyNoteBtn.addEventListener('click', () => this.copyNoteContent());
+        }
+        if (this.deleteNoteBtn) {
+            this.deleteNoteBtn.addEventListener('click', () => this.deleteNoteFromModal());
+        }
+        if (this.noteModal) {
+            this.noteModal.addEventListener('click', (e) => {
+                if (e.target === this.noteModal) this.closeNoteModal();
+            });
         }
     }
 
@@ -484,6 +545,7 @@ class GitHubTodoApp {
             this.encryptionPassword = password;
 
             await this.loadTodos();
+            await this.loadNotes();
             this.showTodoScreen();
         } catch (error) {
             this.showLoginError(error.message);
@@ -1215,6 +1277,213 @@ class GitHubTodoApp {
         return date.toLocaleDateString();
     }
 
+    // Tab switching
+    switchTab(tab) {
+        this.currentTab = tab;
+        this.tabBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        if (this.todosSection) this.todosSection.classList.toggle('hidden', tab !== 'todos');
+        if (this.notesSection) this.notesSection.classList.toggle('hidden', tab !== 'notes');
+    }
+
+    // Notes methods
+    async loadNotes() {
+        try {
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                this.notesFileSha = data.sha;
+                const encryptedContent = atob(data.content);
+                const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
+                this.notes = JSON.parse(decrypted);
+            } else if (response.status === 404) {
+                this.notes = [];
+                this.notesFileSha = null;
+            } else {
+                throw new Error('Failed to load notes');
+            }
+
+            this.renderNotes();
+        } catch (error) {
+            console.error('Load notes error:', error);
+            if (error.message.includes('Decryption failed')) {
+                throw error;
+            }
+            this.notes = [];
+            this.renderNotes();
+        }
+    }
+
+    async saveNotes() {
+        this.setSyncStatus('Encrypting & saving notes...', 'saving');
+        try {
+            const plaintext = JSON.stringify(this.notes, null, 2);
+            const encrypted = await Crypto.encrypt(plaintext, this.encryptionPassword);
+
+            const content = btoa(encrypted);
+            const body = {
+                message: 'Update encrypted notes',
+                content: content
+            };
+
+            if (this.notesFileSha) {
+                body.sha = this.notesFileSha;
+            }
+
+            const response = await this.githubFetch(
+                `https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`,
+                {
+                    method: 'PUT',
+                    body: JSON.stringify(body)
+                }
+            );
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to save notes');
+            }
+
+            const data = await response.json();
+            this.notesFileSha = data.content.sha;
+            this.setSyncStatus('Encrypted & saved to GitHub', 'saved');
+        } catch (error) {
+            console.error('Save notes error:', error);
+            this.setSyncStatus('Failed to save: ' + error.message, 'error');
+        }
+    }
+
+    addNote() {
+        const title = this.newNoteTitleInput.value.trim();
+        if (!title) return;
+
+        const note = {
+            id: Date.now().toString(),
+            title: title,
+            content: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        this.notes.unshift(note);
+        this.newNoteTitleInput.value = '';
+        this.renderNotes();
+        this.saveNotes();
+
+        // Open the new note in modal
+        this.openNoteModal(note.id);
+    }
+
+    openNoteModal(id) {
+        const note = this.notes.find(n => n.id === id);
+        if (!note) return;
+
+        this.editingNoteId = id;
+        if (this.modalNoteTitle) this.modalNoteTitle.value = note.title;
+        if (this.modalNoteContent) this.modalNoteContent.value = note.content;
+        if (this.noteModal) this.noteModal.classList.remove('hidden');
+        if (this.modalNoteContent) this.modalNoteContent.focus();
+    }
+
+    closeNoteModal() {
+        if (this.noteModal) this.noteModal.classList.add('hidden');
+        this.editingNoteId = null;
+    }
+
+    saveNoteFromModal() {
+        if (!this.editingNoteId) return;
+
+        const note = this.notes.find(n => n.id === this.editingNoteId);
+        if (!note) return;
+
+        note.title = (this.modalNoteTitle ? this.modalNoteTitle.value.trim() : '') || 'Untitled';
+        note.content = this.modalNoteContent ? this.modalNoteContent.value : '';
+        note.updatedAt = new Date().toISOString();
+
+        this.renderNotes();
+        this.saveNotes();
+        this.closeNoteModal();
+    }
+
+    async copyNoteContent() {
+        const content = this.modalNoteContent ? this.modalNoteContent.value : '';
+        try {
+            await navigator.clipboard.writeText(content);
+            if (this.copyNoteBtn) {
+                this.copyNoteBtn.textContent = 'Copied!';
+                this.copyNoteBtn.classList.add('copied');
+                setTimeout(() => {
+                    this.copyNoteBtn.textContent = 'Copy';
+                    this.copyNoteBtn.classList.remove('copied');
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Copy failed:', error);
+        }
+    }
+
+    deleteNoteFromModal() {
+        if (!this.editingNoteId) return;
+
+        this.notes = this.notes.filter(n => n.id !== this.editingNoteId);
+        this.renderNotes();
+        this.saveNotes();
+        this.closeNoteModal();
+    }
+
+    renderNotes() {
+        if (!this.notesList) return;
+
+        if (this.notes.length === 0) {
+            this.notesList.innerHTML = `
+                <li class="empty-state">
+                    No notes yet. Add one above!
+                </li>
+            `;
+        } else {
+            this.notesList.innerHTML = this.notes.map(note => `
+                <li class="note-item" data-id="${note.id}">
+                    <svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <div class="note-info">
+                        <div class="note-title">${this.escapeHtml(note.title)}</div>
+                        <div class="note-preview">${this.escapeHtml(note.content.substring(0, 50)) || 'No content'}</div>
+                    </div>
+                    <span class="note-date">${this.formatDate(note.updatedAt)}</span>
+                </li>
+            `).join('');
+
+            this.notesList.querySelectorAll('.note-item').forEach(item => {
+                const id = item.dataset.id;
+                item.addEventListener('click', () => this.openNoteModal(id));
+            });
+        }
+
+        if (this.notesCount) {
+            this.notesCount.textContent = `${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`;
+        }
+    }
+
+    formatDate(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        if (days === 0) return 'Today';
+        if (days === 1) return 'Yesterday';
+        if (days < 7) return `${days} days ago`;
+        return date.toLocaleDateString();
+    }
+
     logout() {
         localStorage.removeItem('github_token');
         localStorage.removeItem('github_repo');
@@ -1227,6 +1496,11 @@ class GitHubTodoApp {
         this.fileSha = null;
         this.actionsSha = null;
         this.isFirstTimeSetup = false;
+        // Clear notes
+        this.notes = [];
+        this.notesFileSha = null;
+        this.currentTab = 'todos';
+        this.editingNoteId = null;
         if (this.tokenInput) this.tokenInput.value = '';
         if (this.repoInput) this.repoInput.value = '';
         if (this.passwordInput) this.passwordInput.value = '';

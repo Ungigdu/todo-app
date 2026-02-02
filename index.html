@@ -51,31 +51,80 @@
 
         <!-- Todo Screen -->
         <div id="todo-screen" class="screen hidden">
-            <header>
-                <h1>My Todos</h1>
-                <div class="user-info">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
                     <img id="user-avatar" src="" alt="avatar">
                     <span id="user-name"></span>
+                </div>
+                <nav class="sidebar-nav">
+                    <button class="tab-btn active" data-tab="todos">Todos</button>
+                    <button class="tab-btn" data-tab="notes">Notes</button>
+                </nav>
+                <div class="sidebar-footer">
                     <button id="logout-btn" class="btn small">Logout</button>
                 </div>
-            </header>
-
-            <div class="add-todo">
-                <input type="text" id="new-todo" placeholder="What needs to be done?">
-                <button id="add-btn" class="btn primary">Add</button>
             </div>
 
-            <div class="filters">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="active">Active</button>
-                <button class="filter-btn" data-filter="completed">Completed</button>
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Todos Section -->
+                <div id="todos-section" class="tab-content">
+                    <div class="content-header">
+                        <div class="add-todo">
+                            <input type="text" id="new-todo" placeholder="What needs to be done?">
+                            <button id="add-btn" class="btn primary">Add</button>
+                        </div>
+                        <div class="filters">
+                            <button class="filter-btn active" data-filter="all">All</button>
+                            <button class="filter-btn" data-filter="active">Active</button>
+                            <button class="filter-btn" data-filter="completed">Completed</button>
+                        </div>
+                    </div>
+
+                    <ul id="todo-list"></ul>
+
+                    <div class="footer">
+                        <span id="items-left">0 items left</span>
+                        <button id="clear-completed" class="btn small">Clear Completed</button>
+                    </div>
+                </div>
+
+                <!-- Notes Section -->
+                <div id="notes-section" class="tab-content hidden">
+                    <div class="content-header">
+                        <div class="add-note">
+                            <input type="text" id="new-note-title" placeholder="Note title...">
+                            <button id="add-note-btn" class="btn primary">Add Note</button>
+                        </div>
+                    </div>
+
+                    <ul id="notes-list"></ul>
+
+                    <div class="footer">
+                        <span id="notes-count">0 notes</span>
+                    </div>
+                </div>
+
+                <p id="sync-status" class="sync-status"></p>
             </div>
+        </div>
 
-            <ul id="todo-list"></ul>
-
-            <div class="footer">
-                <span id="items-left">0 items left</span>
-                <button id="clear-completed" class="btn small">Clear Completed</button>
+        <!-- Note Modal -->
+        <div id="note-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <input type="text" id="modal-note-title" placeholder="Note title">
+                    <button id="close-modal" class="btn small">&times;</button>
+                </div>
+                <textarea id="modal-note-content" placeholder="Write your note..."></textarea>
+                <div class="modal-footer">
+                    <button id="delete-note-btn" class="btn small danger">Delete</button>
+                    <div class="modal-footer-right">
+                        <button id="copy-note-btn" class="btn small">Copy</button>
+                        <button id="save-note-btn" class="btn primary">Save</button>
+                    </div>
+                </div>
             </div>
 
             <p id="sync-status" class="sync-status"></p>
