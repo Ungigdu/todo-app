@@ -623,12 +623,20 @@ class GitHubTodoApp {
     }
 
     async githubFetch(url, options = {}) {
-        return fetch(url, {
+        // Add cache-busting for GET requests to ensure fresh data
+        let fetchUrl = url;
+        if (!options.method || options.method === 'GET') {
+            const separator = url.includes('?') ? '&' : '?';
+            fetchUrl = `${url}${separator}_t=${Date.now()}`;
+        }
+
+        return fetch(fetchUrl, {
             ...options,
             headers: {
                 'Authorization': `token ${this.token}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
                 ...options.headers
             }
         });
@@ -801,7 +809,14 @@ class GitHubTodoApp {
 
     // Sync Methods
     async syncFromRemote() {
-        if (this.isSyncing) return;
+        if (this.isSyncing) {
+            console.log('Sync already in progress, skipping');
+            return;
+        }
+
+        console.log('=== Manual Sync Started ===');
+        console.log('Local todos SHA:', this.fileSha ? this.fileSha.substring(0, 8) : 'null');
+        console.log('Local notes SHA:', this.notesFileSha ? this.notesFileSha.substring(0, 8) : 'null');
 
         this.isSyncing = true;
         this.setSyncStatus('Syncing...', 'syncing');
@@ -824,33 +839,41 @@ class GitHubTodoApp {
             // Sync todos
             if (todosResponse.ok) {
                 const data = await todosResponse.json();
+                console.log('Remote todos SHA:', data.sha.substring(0, 8), '| Local:', this.fileSha ? this.fileSha.substring(0, 8) : 'null');
                 if (this.fileSha !== data.sha) {
                     todosChanged = true;
                     this.fileSha = data.sha;
                     const encryptedContent = atob(data.content);
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     this.todos = JSON.parse(decrypted);
-                    console.log('Todos updated from remote, new SHA:', data.sha.substring(0, 8));
+                    console.log('✓ Todos updated from remote');
+                } else {
+                    console.log('Todos SHA match, no update needed');
                 }
             } else if (todosResponse.status === 404) {
-                // No remote file, keep local
-                console.log('No remote todos file');
+                console.log('No remote todos file (404)');
+            } else {
+                console.log('Todos fetch failed:', todosResponse.status);
             }
 
             // Sync notes
             if (notesResponse.ok) {
                 const data = await notesResponse.json();
+                console.log('Remote notes SHA:', data.sha.substring(0, 8), '| Local:', this.notesFileSha ? this.notesFileSha.substring(0, 8) : 'null');
                 if (this.notesFileSha !== data.sha) {
                     notesChanged = true;
                     this.notesFileSha = data.sha;
                     const encryptedContent = atob(data.content);
                     const decrypted = await Crypto.decrypt(encryptedContent, this.encryptionPassword);
                     this.notes = JSON.parse(decrypted);
-                    console.log('Notes updated from remote, new SHA:', data.sha.substring(0, 8));
+                    console.log('✓ Notes updated from remote');
+                } else {
+                    console.log('Notes SHA match, no update needed');
                 }
             } else if (notesResponse.status === 404) {
-                // No remote file, keep local
-                console.log('No remote notes file');
+                console.log('No remote notes file (404)');
+            } else {
+                console.log('Notes fetch failed:', notesResponse.status);
             }
 
             this.renderTodos();
@@ -861,13 +884,15 @@ class GitHubTodoApp {
             if (notesChanged) changes.push('notes');
 
             if (changes.length > 0) {
+                console.log('=== Sync Complete: ' + changes.join(' & ') + ' updated ===');
                 this.setSyncStatus(`Synced - ${changes.join(' & ')} updated`, 'saved');
             } else {
+                console.log('=== Sync Complete: no changes ===');
                 this.setSyncStatus('Synced - no changes', 'saved');
             }
 
         } catch (error) {
-            console.error('Sync error:', error);
+            console.error('=== Sync Failed ===', error);
             this.setSyncStatus('Sync failed: ' + error.message, 'error');
         } finally {
             this.isSyncing = false;
