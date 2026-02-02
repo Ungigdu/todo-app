@@ -125,4 +125,48 @@ test.describe('Layout Tests', () => {
         // Popup should not go off-screen to the right
         expect(popup.x + popup.width).toBeLessThanOrEqual(viewport.width);
     });
+
+    test('avatar popup should contain reset password button', async ({ page }) => {
+        // Show the popup
+        await page.evaluate(() => {
+            document.getElementById('avatar-popup').classList.remove('hidden');
+        });
+
+        const resetBtn = page.locator('#reset-password-btn');
+        await expect(resetBtn).toBeVisible();
+        await expect(resetBtn).toHaveText('Reset Password');
+    });
+
+    test('reset password modal should open when button clicked', async ({ page }) => {
+        // Show the popup
+        await page.evaluate(() => {
+            document.getElementById('avatar-popup').classList.remove('hidden');
+        });
+
+        // Click reset password button
+        await page.click('#reset-password-btn');
+
+        // Modal should be visible
+        const modal = page.locator('#reset-password-modal');
+        await expect(modal).toBeVisible();
+
+        // Should have required inputs
+        await expect(page.locator('#old-password')).toBeVisible();
+        await expect(page.locator('#new-password')).toBeVisible();
+        await expect(page.locator('#confirm-new-password')).toBeVisible();
+    });
+
+    test('reset password modal should close when cancel clicked', async ({ page }) => {
+        // Show the modal
+        await page.evaluate(() => {
+            document.getElementById('reset-password-modal').classList.remove('hidden');
+        });
+
+        // Click cancel button
+        await page.click('#cancel-reset-btn');
+
+        // Modal should be hidden
+        const modal = page.locator('#reset-password-modal');
+        await expect(modal).toBeHidden();
+    });
 });

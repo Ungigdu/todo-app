@@ -168,6 +168,17 @@ class GitHubTodoApp {
         this.copyNoteBtn = document.getElementById('copy-note-btn');
         this.saveNoteBtn = document.getElementById('save-note-btn');
         this.deleteNoteBtn = document.getElementById('delete-note-btn');
+
+        // Reset password elements
+        this.resetPasswordBtn = document.getElementById('reset-password-btn');
+        this.resetPasswordModal = document.getElementById('reset-password-modal');
+        this.oldPasswordInput = document.getElementById('old-password');
+        this.newPasswordInput = document.getElementById('new-password');
+        this.confirmNewPasswordInput = document.getElementById('confirm-new-password');
+        this.resetPasswordError = document.getElementById('reset-password-error');
+        this.closeResetModalBtn = document.getElementById('close-reset-modal');
+        this.cancelResetBtn = document.getElementById('cancel-reset-btn');
+        this.confirmResetBtn = document.getElementById('confirm-reset-btn');
     }
 
     bindEvents() {
@@ -246,6 +257,25 @@ class GitHubTodoApp {
         if (this.noteModal) {
             this.noteModal.addEventListener('click', (e) => {
                 if (e.target === this.noteModal) this.closeNoteModal();
+            });
+        }
+
+        // Reset password events
+        if (this.resetPasswordBtn) {
+            this.resetPasswordBtn.addEventListener('click', () => this.openResetPasswordModal());
+        }
+        if (this.closeResetModalBtn) {
+            this.closeResetModalBtn.addEventListener('click', () => this.closeResetPasswordModal());
+        }
+        if (this.cancelResetBtn) {
+            this.cancelResetBtn.addEventListener('click', () => this.closeResetPasswordModal());
+        }
+        if (this.confirmResetBtn) {
+            this.confirmResetBtn.addEventListener('click', () => this.resetPassword());
+        }
+        if (this.resetPasswordModal) {
+            this.resetPasswordModal.addEventListener('click', (e) => {
+                if (e.target === this.resetPasswordModal) this.closeResetPasswordModal();
             });
         }
     }
@@ -1049,6 +1079,142 @@ class GitHubTodoApp {
         if (days === 1) return 'Yesterday';
         if (days < 7) return `${days} days ago`;
         return date.toLocaleDateString();
+    }
+
+    // Reset Password Methods
+    openResetPasswordModal() {
+        // Close avatar popup
+        if (this.avatarPopup) {
+            this.avatarPopup.classList.add('hidden');
+        }
+        // Clear form
+        if (this.oldPasswordInput) this.oldPasswordInput.value = '';
+        if (this.newPasswordInput) this.newPasswordInput.value = '';
+        if (this.confirmNewPasswordInput) this.confirmNewPasswordInput.value = '';
+        if (this.resetPasswordError) this.resetPasswordError.textContent = '';
+        // Show modal
+        if (this.resetPasswordModal) {
+            this.resetPasswordModal.classList.remove('hidden');
+        }
+    }
+
+    closeResetPasswordModal() {
+        if (this.resetPasswordModal) {
+            this.resetPasswordModal.classList.add('hidden');
+        }
+    }
+
+    async resetPassword() {
+        const oldPassword = this.oldPasswordInput ? this.oldPasswordInput.value : '';
+        const newPassword = this.newPasswordInput ? this.newPasswordInput.value : '';
+        const confirmPassword = this.confirmNewPasswordInput ? this.confirmNewPasswordInput.value : '';
+
+        // Validate inputs
+        if (!oldPassword) {
+            this.showResetPasswordError('Please enter your current password');
+            return;
+        }
+
+        if (oldPassword !== this.encryptionPassword) {
+            this.showResetPasswordError('Current password is incorrect');
+            return;
+        }
+
+        if (!newPassword) {
+            this.showResetPasswordError('Please enter a new password');
+            return;
+        }
+
+        if (newPassword.length < 8) {
+            this.showResetPasswordError('New password must be at least 8 characters');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            this.showResetPasswordError('New passwords do not match');
+            return;
+        }
+
+        if (newPassword === oldPassword) {
+            this.showResetPasswordError('New password must be different from current password');
+            return;
+        }
+
+        // Disable button during processing
+        if (this.confirmResetBtn) {
+            this.confirmResetBtn.disabled = true;
+            this.confirmResetBtn.textContent = 'Resetting...';
+        }
+
+        try {
+            // Re-encrypt and save todos with new password
+            if (this.todos.length > 0 || this.fileSha) {
+                const todosPlaintext = JSON.stringify(this.todos, null, 2);
+                const todosEncrypted = await Crypto.encrypt(todosPlaintext, newPassword);
+
+                const todosBody = {
+                    message: 'Re-encrypt todos with new password',
+                    content: btoa(todosEncrypted)
+                };
+                if (this.fileSha) {
+                    todosBody.sha = this.fileSha;
+                }
+
+                const todosResponse = await this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${this.dataFile}`,
+                    { method: 'PUT', body: JSON.stringify(todosBody) }
+                );
+
+                if (!todosResponse.ok) {
+                    const error = await todosResponse.json();
+                    throw new Error('Failed to save todos: ' + (error.message || 'Unknown error'));
+                }
+            }
+
+            // Re-encrypt and save notes with new password
+            if (this.notes.length > 0 || this.notesFileSha) {
+                const notesPlaintext = JSON.stringify(this.notes, null, 2);
+                const notesEncrypted = await Crypto.encrypt(notesPlaintext, newPassword);
+
+                const notesBody = {
+                    message: 'Re-encrypt notes with new password',
+                    content: btoa(notesEncrypted)
+                };
+                if (this.notesFileSha) {
+                    notesBody.sha = this.notesFileSha;
+                }
+
+                const notesResponse = await this.githubFetch(
+                    `https://api.github.com/repos/${this.repo}/contents/${this.notesDataFile}`,
+                    { method: 'PUT', body: JSON.stringify(notesBody) }
+                );
+
+                if (!notesResponse.ok) {
+                    const error = await notesResponse.json();
+                    throw new Error('Failed to save notes: ' + (error.message || 'Unknown error'));
+                }
+            }
+
+            // Success - close modal and logout
+            this.closeResetPasswordModal();
+            alert('Password reset successful! Please sign in with your new password.');
+            this.logout();
+
+        } catch (error) {
+            console.error('Reset password error:', error);
+            this.showResetPasswordError(error.message);
+        } finally {
+            if (this.confirmResetBtn) {
+                this.confirmResetBtn.disabled = false;
+                this.confirmResetBtn.textContent = 'Reset Password';
+            }
+        }
+    }
+
+    showResetPasswordError(message) {
+        if (this.resetPasswordError) {
+            this.resetPasswordError.textContent = message;
+        }
     }
 
     logout() {

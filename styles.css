@@ -192,6 +192,11 @@ body {
     width: 100%;
     padding: 8px 12px;
     font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.avatar-popup .btn:last-child {
+    margin-bottom: 0;
 }
 
 @keyframes popupFadeIn {
@@ -894,6 +899,57 @@ header {
 #note-modal #modal-note-content {
     flex: 1;
     min-height: 0;
+}
+
+/* Reset Password Modal */
+.reset-password-content {
+    max-width: 400px;
+    max-height: none;
+    height: auto;
+    position: relative;
+    inset: auto;
+    border-radius: 12px;
+}
+
+.reset-password-content .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.reset-password-content .modal-header h2 {
+    font-size: 18px;
+    color: #333;
+    margin: 0;
+}
+
+.reset-password-form {
+    padding: 20px;
+}
+
+.reset-password-form .form-group {
+    margin-bottom: 15px;
+}
+
+.reset-password-form .form-group input {
+    width: 100%;
+}
+
+.reset-password-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+#reset-password-modal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#reset-password-modal.hidden {
+    display: none;
 }
 
 /* Responsive - smaller screens */
