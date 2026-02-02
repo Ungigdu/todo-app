@@ -88,6 +88,30 @@ test.describe('Layout Tests', () => {
         expect(modalContent.width).toBeCloseTo(viewport.width, 0);
     });
 
+    test('sync status should fit within sidebar width', async ({ page }) => {
+        // Set the sync status to pending state
+        await page.evaluate(() => {
+            const status = document.getElementById('sync-status');
+            status.textContent = 'Changes pending...';
+            status.className = 'sync-status sidebar-sync pending';
+        });
+
+        const sidebar = await page.locator('.sidebar').boundingBox();
+        const syncStatus = await page.locator('#sync-status').boundingBox();
+
+        console.log(`Sidebar width: ${sidebar.width}`);
+        console.log(`Sync status: x=${syncStatus.x}, width=${syncStatus.width}, right=${syncStatus.x + syncStatus.width}`);
+        console.log(`Sidebar right edge: ${sidebar.x + sidebar.width}`);
+
+        // Sync status should not exceed sidebar width
+        const statusRight = syncStatus.x + syncStatus.width;
+        const sidebarRight = sidebar.x + sidebar.width;
+        expect(statusRight).toBeLessThanOrEqual(sidebarRight);
+
+        // Sync status height should be reasonable (not wrapping to multiple lines)
+        expect(syncStatus.height).toBeLessThanOrEqual(20);
+    });
+
     test('avatar popup should stay within viewport bounds', async ({ page }) => {
         // Show the popup
         await page.evaluate(() => {

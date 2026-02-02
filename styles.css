@@ -154,38 +154,6 @@ body {
     word-break: break-all;
 }
 
-/* Sidebar sync status */
-.sync-status.sidebar-sync {
-    font-size: 7px;
-    color: white;
-    margin-top: 8px;
-    padding: 3px 4px;
-    background: rgba(74,222,128,0.8);
-    border-radius: 3px;
-    text-align: center;
-    height: 16px;
-    line-height: 10px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
-.sync-status.sidebar-sync.pending,
-.sync-status.sidebar-sync.saving,
-.sync-status.sidebar-sync.syncing {
-    background: rgba(251,191,36,0.9);
-    color: #333;
-}
-
-.sync-status.sidebar-sync.saved {
-    background: rgba(74,222,128,0.8);
-    color: white;
-}
-
-.sync-status.sidebar-sync.error {
-    background: rgba(239,68,68,0.9);
-    color: white;
-}
 
 .sidebar-sync-btn {
     margin-top: 6px;
@@ -564,6 +532,46 @@ header {
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
+}
+
+/* Sidebar sync status - must come after base .sync-status rules */
+.sync-status.sidebar-sync {
+    font-size: 7px;
+    color: white;
+    margin-top: 6px;
+    margin-bottom: 0;
+    padding: 2px 4px;
+    background: rgba(74,222,128,0.9);
+    border-radius: 3px;
+    text-align: center;
+    height: 14px;
+    line-height: 10px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.sync-status.sidebar-sync::before {
+    content: none;
+}
+
+.sync-status.sidebar-sync.pending,
+.sync-status.sidebar-sync.saving,
+.sync-status.sidebar-sync.syncing {
+    background: rgba(251,191,36,0.95);
+    color: #333;
+}
+
+.sync-status.sidebar-sync.saved {
+    background: rgba(74,222,128,0.9);
+    color: white;
+}
+
+.sync-status.sidebar-sync.error {
+    background: rgba(239,68,68,0.9);
+    color: white;
 }
 
 /* Loading state */
