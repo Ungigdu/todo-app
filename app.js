@@ -270,6 +270,7 @@ class GitHubTodoApp {
         this.itemsLeft = document.getElementById('items-left');
         this.clearCompletedBtn = document.getElementById('clear-completed');
         this.syncStatus = document.getElementById('sync-status');
+        this.syncStatusBar = document.getElementById('sync-status-bar');
         this.filterBtns = document.querySelectorAll('.filter-btn');
 
         // Sync elements
@@ -998,7 +999,11 @@ class GitHubTodoApp {
 
     setSyncStatus(message, className) {
         this.syncStatus.textContent = message;
-        this.syncStatus.className = 'sync-status ' + className;
+        this.syncStatus.className = 'sync-status-text';
+        // Also update status bar background
+        if (this.syncStatusBar) {
+            this.syncStatusBar.className = 'sync-status-bar ' + className;
+        }
     }
 
     scheduleSave(action = null) {

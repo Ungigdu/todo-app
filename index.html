@@ -51,27 +51,33 @@
 
         <!-- Todo Screen -->
         <div id="todo-screen" class="screen hidden">
-            <!-- Left Sidebar -->
-            <div class="sidebar">
-                <div class="sidebar-header">
-                    <div class="avatar-container">
-                        <img id="user-avatar" src="" alt="avatar">
-                        <div id="avatar-popup" class="avatar-popup hidden">
-                            <span class="popup-username" id="popup-user-name"></span>
-                            <button id="logout-btn" class="btn small">Logout</button>
-                        </div>
-                    </div>
-                    <span id="user-name"></span>
-                    <p id="sync-status" class="sync-status sidebar-sync"></p>
-                    <button id="sync-now-btn" class="btn small sidebar-sync-btn">Sync</button>
-                </div>
-                <nav class="sidebar-nav">
-                    <button class="tab-btn active" data-tab="todos">Todos</button>
-                    <button class="tab-btn" data-tab="notes">Notes</button>
-                </nav>
+            <!-- Sync Status Bar -->
+            <div id="sync-status-bar" class="sync-status-bar">
+                <span id="sync-status" class="sync-status-text">Synced</span>
+                <button id="sync-now-btn" class="sync-bar-btn">Sync</button>
             </div>
 
-            <!-- Main Content -->
+            <!-- Main layout (sidebar + content) -->
+            <div class="todo-main">
+                <!-- Left Sidebar -->
+                <div class="sidebar">
+                    <div class="sidebar-header">
+                        <div class="avatar-container">
+                            <img id="user-avatar" src="" alt="avatar">
+                            <div id="avatar-popup" class="avatar-popup hidden">
+                                <span class="popup-username" id="popup-user-name"></span>
+                                <button id="logout-btn" class="btn small">Logout</button>
+                            </div>
+                        </div>
+                        <span id="user-name"></span>
+                    </div>
+                    <nav class="sidebar-nav">
+                        <button class="tab-btn active" data-tab="todos">Todos</button>
+                        <button class="tab-btn" data-tab="notes">Notes</button>
+                    </nav>
+                </div>
+
+                <!-- Main Content -->
             <div class="main-content">
                 <!-- Todos Section -->
                 <div id="todos-section" class="tab-content">
@@ -110,6 +116,7 @@
                         <span id="notes-count">0 notes</span>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
 

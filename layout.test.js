@@ -25,6 +25,7 @@ test.describe('Layout Tests', () => {
     test('main-content should fill remaining width', async ({ page }) => {
         const sidebar = await page.locator('.sidebar').boundingBox();
         const mainContent = await page.locator('.main-content').boundingBox();
+        const statusBar = await page.locator('#sync-status-bar').boundingBox();
         const viewport = page.viewportSize();
 
         console.log(`Sidebar width: ${sidebar.width}`);
@@ -32,8 +33,8 @@ test.describe('Layout Tests', () => {
 
         // Main content should fill remaining width
         expect(mainContent.width).toBeCloseTo(viewport.width - sidebar.width, 1);
-        // Main content should fill full height
-        expect(mainContent.height).toBeCloseTo(viewport.height, 0);
+        // Main content should fill height minus status bar
+        expect(mainContent.height).toBeCloseTo(viewport.height - statusBar.height, 0);
     });
 
     test('footer should be at bottom of viewport', async ({ page }) => {
@@ -57,10 +58,12 @@ test.describe('Layout Tests', () => {
     test('sidebar should fill full viewport height', async ({ page }) => {
         const viewport = page.viewportSize();
         const sidebar = await page.locator('.sidebar').boundingBox();
+        const statusBar = await page.locator('#sync-status-bar').boundingBox();
 
         console.log(`Sidebar height: ${sidebar.height}`);
 
-        expect(sidebar.height).toBeCloseTo(viewport.height, 0);
+        // Sidebar should fill height minus status bar
+        expect(sidebar.height).toBeCloseTo(viewport.height - statusBar.height, 0);
     });
 
     test('note modal should fill viewport on mobile', async ({ page }) => {
@@ -88,28 +91,22 @@ test.describe('Layout Tests', () => {
         expect(modalContent.width).toBeCloseTo(viewport.width, 0);
     });
 
-    test('sync status should fit within sidebar width', async ({ page }) => {
-        // Set the sync status to pending state
-        await page.evaluate(() => {
-            const status = document.getElementById('sync-status');
-            status.textContent = 'Changes pending...';
-            status.className = 'sync-status sidebar-sync pending';
-        });
+    test('sync status bar should span full width at top', async ({ page }) => {
+        const viewport = page.viewportSize();
+        const statusBar = await page.locator('#sync-status-bar').boundingBox();
 
-        const sidebar = await page.locator('.sidebar').boundingBox();
-        const syncStatus = await page.locator('#sync-status').boundingBox();
+        console.log(`Viewport width: ${viewport.width}`);
+        console.log(`Status bar: x=${statusBar.x}, y=${statusBar.y}, width=${statusBar.width}, height=${statusBar.height}`);
 
-        console.log(`Sidebar width: ${sidebar.width}`);
-        console.log(`Sync status: x=${syncStatus.x}, width=${syncStatus.width}, right=${syncStatus.x + syncStatus.width}`);
-        console.log(`Sidebar right edge: ${sidebar.x + sidebar.width}`);
+        // Status bar should be at top (y = 0)
+        expect(statusBar.y).toBe(0);
 
-        // Sync status should not exceed sidebar width
-        const statusRight = syncStatus.x + syncStatus.width;
-        const sidebarRight = sidebar.x + sidebar.width;
-        expect(statusRight).toBeLessThanOrEqual(sidebarRight);
+        // Status bar should span full viewport width
+        expect(statusBar.width).toBeCloseTo(viewport.width, 0);
 
-        // Sync status height should be reasonable (not wrapping to multiple lines)
-        expect(syncStatus.height).toBeLessThanOrEqual(20);
+        // Status bar should be a single line (small height)
+        expect(statusBar.height).toBeLessThanOrEqual(24);
+        expect(statusBar.height).toBeGreaterThanOrEqual(16);
     });
 
     test('avatar popup should stay within viewport bounds', async ({ page }) => {

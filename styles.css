@@ -47,9 +47,67 @@ body {
 /* Sidebar Layout */
 #todo-screen {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     height: 100vh;
     height: 100dvh;
+}
+
+/* Sync Status Bar */
+.sync-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 20px;
+    min-height: 20px;
+    background: #22c55e;
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.sync-status-bar.pending,
+.sync-status-bar.saving,
+.sync-status-bar.syncing {
+    background: #eab308;
+    color: #333;
+}
+
+.sync-status-bar.saved {
+    background: #22c55e;
+    color: white;
+}
+
+.sync-status-bar.error {
+    background: #ef4444;
+    color: white;
+}
+
+.sync-status-text {
+    font-size: 11px;
+}
+
+.sync-bar-btn {
+    background: rgba(255,255,255,0.25);
+    border: none;
+    color: inherit;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.sync-bar-btn:hover {
+    background: rgba(255,255,255,0.4);
+}
+
+/* Main layout container (sidebar + content) */
+.todo-main {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    overflow: hidden;
 }
 
 #todo-screen.hidden {
@@ -153,22 +211,6 @@ body {
     text-align: center;
     word-break: break-all;
 }
-
-
-.sidebar-sync-btn {
-    margin-top: 6px;
-    padding: 4px 8px !important;
-    font-size: 9px !important;
-    background: rgba(255,255,255,0.15) !important;
-    color: white !important;
-    border: none;
-    width: 100%;
-}
-
-.sidebar-sync-btn:hover {
-    background: rgba(255,255,255,0.25) !important;
-}
-
 .sidebar-nav {
     flex: 1;
     display: flex;
@@ -532,46 +574,6 @@ header {
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
-}
-
-/* Sidebar sync status - must come after base .sync-status rules */
-.sync-status.sidebar-sync {
-    font-size: 7px;
-    color: white;
-    margin-top: 6px;
-    margin-bottom: 0;
-    padding: 2px 4px;
-    background: rgba(74,222,128,0.9);
-    border-radius: 3px;
-    text-align: center;
-    height: 14px;
-    line-height: 10px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    box-sizing: border-box;
-}
-
-.sync-status.sidebar-sync::before {
-    content: none;
-}
-
-.sync-status.sidebar-sync.pending,
-.sync-status.sidebar-sync.saving,
-.sync-status.sidebar-sync.syncing {
-    background: rgba(251,191,36,0.95);
-    color: #333;
-}
-
-.sync-status.sidebar-sync.saved {
-    background: rgba(74,222,128,0.9);
-    color: white;
-}
-
-.sync-status.sidebar-sync.error {
-    background: rgba(239,68,68,0.9);
-    color: white;
 }
 
 /* Loading state */
@@ -1172,12 +1174,6 @@ header {
 
     .sidebar-header span {
         font-size: 8px;
-    }
-
-    .sync-status.sidebar-sync {
-        font-size: 7px;
-        padding: 3px 4px;
-        margin-top: 5px;
     }
 
     .avatar-popup {
