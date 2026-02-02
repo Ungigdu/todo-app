@@ -114,6 +114,16 @@ See `agent/style-guide.md` for the complete design system.
 
 ---
 
+## Git Configuration
+
+Before pushing, switch to the correct GitHub user:
+```bash
+git config user.name "ungigdu"
+git config user.email "nicholasyeeaungigdu@gmail.com"
+```
+
+---
+
 ## History
 
 All changes logged in `agent/history.md`
