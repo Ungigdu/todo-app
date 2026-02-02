@@ -1083,14 +1083,47 @@ header {
     flex-direction: column;
     align-items: center;
     padding: 10px 8px;
-    background: var(--bg-input);
-    border-radius: 8px;
-    cursor: pointer;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
     transition: all 0.2s;
+    position: relative;
 }
 
 .file-item:hover {
     background: var(--bg-hover);
+    border-color: var(--border-dark);
+}
+
+.file-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.file-action-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    color: var(--text-muted);
+}
+
+.file-action-btn:hover {
+    background: var(--color-accent-light);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.file-action-btn svg {
+    width: 14px;
+    height: 14px;
 }
 
 .file-thumbnail {
@@ -1165,8 +1198,8 @@ header {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    min-height: 200px;
-    max-height: 60vh;
+    min-height: 300px;
+    max-height: 70vh;
     overflow: auto;
     background: var(--bg-input);
 }
@@ -1180,6 +1213,48 @@ header {
 .file-preview-body .file-icon-large {
     font-size: 80px;
     color: var(--color-accent);
+}
+
+.file-preview-body .pdf-viewer {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+    border: none;
+    border-radius: var(--radius-sm);
+}
+
+/* Full-screen PDF preview */
+#file-preview-modal.pdf-fullscreen {
+    padding: 0;
+}
+
+#file-preview-modal.pdf-fullscreen .modal-content {
+    max-width: none;
+    max-height: none;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+}
+
+#file-preview-modal.pdf-fullscreen .modal-header {
+    padding: 10px 20px;
+}
+
+#file-preview-modal.pdf-fullscreen .file-preview-body {
+    max-height: none;
+    min-height: 0;
+    flex: 1;
+    padding: 0;
+}
+
+#file-preview-modal.pdf-fullscreen .pdf-viewer {
+    min-height: 0;
+    height: 100%;
+    border-radius: 0;
+}
+
+#file-preview-modal.pdf-fullscreen .modal-footer {
+    display: none;
 }
 
 .file-preview-info {

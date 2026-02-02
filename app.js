@@ -1753,6 +1753,20 @@ class GitHubTodoApp {
                 } catch (error) {
                     this.filePreviewBody.innerHTML = `<div class="error">Failed to load image</div>`;
                 }
+            } else if (file.type === 'application/pdf') {
+                // For PDFs, use browser's built-in PDF viewer in fullscreen
+                this.filePreviewBody.innerHTML = '<div class="loading">Loading PDF...</div>';
+                if (this.filePreviewModal) this.filePreviewModal.classList.add('pdf-fullscreen');
+                try {
+                    const fileData = await this.loadFileData(id);
+                    const blob = this.base64ToBlob(fileData, 'application/pdf');
+                    const blobUrl = URL.createObjectURL(blob);
+                    this.filePreviewBody.innerHTML = `<iframe src="${blobUrl}" class="pdf-viewer"></iframe>`;
+                    // Store URL for cleanup
+                    this.filePreviewBody.dataset.blobUrl = blobUrl;
+                } catch (error) {
+                    this.filePreviewBody.innerHTML = `<div class="error">Failed to load PDF</div>`;
+                }
             } else {
                 this.filePreviewBody.innerHTML = `<div class="file-icon-large">${this.getFileIcon(file.type)}</div>`;
             }
@@ -1762,7 +1776,15 @@ class GitHubTodoApp {
     }
 
     closeFilePreview() {
-        if (this.filePreviewModal) this.filePreviewModal.classList.add('hidden');
+        // Clean up blob URL if exists
+        if (this.filePreviewBody && this.filePreviewBody.dataset.blobUrl) {
+            URL.revokeObjectURL(this.filePreviewBody.dataset.blobUrl);
+            delete this.filePreviewBody.dataset.blobUrl;
+        }
+        if (this.filePreviewModal) {
+            this.filePreviewModal.classList.add('hidden');
+            this.filePreviewModal.classList.remove('pdf-fullscreen');
+        }
         this.previewingFileId = null;
     }
 
@@ -1774,6 +1796,26 @@ class GitHubTodoApp {
         try {
             this.setSyncStatus('Downloading...', 'saving');
             const fileData = await this.loadFileData(this.previewingFileId);
+
+            const link = document.createElement('a');
+            link.href = `data:${file.type};base64,${fileData}`;
+            link.download = file.name;
+            link.click();
+
+            this.setSyncStatus('Downloaded', 'saved');
+        } catch (error) {
+            console.error('Download error:', error);
+            this.setSyncStatus('Download failed', 'error');
+        }
+    }
+
+    async downloadFileById(id) {
+        const file = this.files.find(f => f.id === id);
+        if (!file) return;
+
+        try {
+            this.setSyncStatus('Downloading...', 'saving');
+            const fileData = await this.loadFileData(id);
 
             const link = document.createElement('a');
             link.href = `data:${file.type};base64,${fileData}`;
@@ -1835,12 +1877,34 @@ class GitHubTodoApp {
                     </div>
                     <div class="file-name">${this.escapeHtml(file.name)}</div>
                     <div class="file-meta">${this.formatFileSize(file.size)}</div>
+                    <div class="file-actions">
+                        <button class="file-action-btn preview-btn" title="Preview">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                        <button class="file-action-btn download-btn" title="Download">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             `).join('');
 
             this.filesList.querySelectorAll('.file-item').forEach(item => {
                 const id = item.dataset.id;
-                item.addEventListener('click', () => this.openFilePreview(id));
+                item.querySelector('.preview-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openFilePreview(id);
+                });
+                item.querySelector('.download-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.downloadFileById(id);
+                });
             });
         }
 
@@ -1905,6 +1969,16 @@ class GitHubTodoApp {
             const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
             return `${dateStr} ${timeStr}`;
         }
+    }
+
+    base64ToBlob(base64, mimeType) {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: mimeType });
     }
 
     // Reset Password Methods
