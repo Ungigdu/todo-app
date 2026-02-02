@@ -116,7 +116,12 @@ See `agent/style-guide.md` for the complete design system.
 
 ## Git Configuration
 
-Before pushing, switch to the correct GitHub user:
+Before pushing, switch to the correct GitHub account:
+```bash
+gh auth switch -u Ungigdu
+```
+
+Set commit author (optional):
 ```bash
 git config user.name "ungigdu"
 git config user.email "nicholasyeeaungigdu@gmail.com"
